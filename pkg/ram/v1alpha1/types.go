@@ -423,6 +423,7 @@ type AppConfigGroup struct {
 
 //IngressHTTPRoute ingress http route
 type IngressHTTPRoute struct {
+	IngressKey           string            `json:"ingress_key"`
 	DefaultDomain        bool              `json:"default_domain"`
 	Location             string            `json:"location"`
 	Cookies              map[string]string `json:"cookies"`
@@ -441,6 +442,7 @@ type IngressHTTPRoute struct {
 
 //IngressSreamRoute ingress stream route
 type IngressSreamRoute struct {
+	IngressKey        string `json:"ingress_key"`
 	Protocol          string `json:"protocol"`
 	ConnectionTimeout int    `json:"connection_timeout"`
 	TargetComponent
