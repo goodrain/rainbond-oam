@@ -47,6 +47,8 @@ var (
 	RAM AppFormat = "ram"
 	//DC -
 	DC AppFormat = "docker-compose"
+	//SC -
+	SLG AppFormat = "slug"
 )
 
 //New new exporter
@@ -68,6 +70,15 @@ func New(format AppFormat, homePath string, ram v1alpha1.RainbondApplicationConf
 			client:     client,
 			homePath:   homePath,
 			exportPath: path.Join(homePath, fmt.Sprintf("%s-%s-dockercompose", ram.AppName, ram.AppVersion)),
+		}
+	case SLG :
+		return &slugExporter{
+			logger:     logger,
+			ram:        ram,
+			client:     client,
+			mode:       "offline",
+			homePath:   homePath,
+			exportPath: path.Join(homePath, fmt.Sprintf("%s-%s-slug", ram.AppName, ram.AppVersion)),
 		}
 	default:
 		panic("not support app format")

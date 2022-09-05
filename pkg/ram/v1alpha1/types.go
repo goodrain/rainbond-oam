@@ -504,3 +504,10 @@ type ComponentK8sAttribute struct {
 	// The value is stored in the database in the form of `json/yaml/string`.
 	AttributeValue string `json:"attribute_value"`
 }
+
+// Manifest Image Packaging Manifest.
+type Manifest struct {
+	Config   string   `json:"Config"`
+	RepoTags []string `json:"RepoTags"`
+	Layers   []string `json:"Layers"`
+}
