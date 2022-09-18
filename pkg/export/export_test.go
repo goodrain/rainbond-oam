@@ -19,10 +19,12 @@
 package export
 
 import (
+	"context"
 	"encoding/json"
+	"github.com/containerd/containerd"
+	"github.com/containerd/containerd/namespaces"
 	"testing"
 
-	"github.com/docker/docker/client"
 	"github.com/goodrain/rainbond-oam/pkg/ram/v1alpha1"
 	"github.com/sirupsen/logrus"
 )
@@ -33,7 +35,18 @@ var kongRAM = `
 func TestExportDockerCompose(t *testing.T) {
 	var ram v1alpha1.RainbondApplicationConfig
 	json.Unmarshal([]byte(kongRAM), &ram)
-	c, _ := client.NewEnvClient()
+	//c, _ := client.NewEnvClient()
+	containerdClient, err := containerd.New("/run/containerd/containerd.sock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cctx := namespaces.WithNamespace(context.Background(), "rainbond")
+	imageService := containerdClient.ImageService()
+	c := ContainerdAPI{
+		ImageService:     imageService,
+		CCtx:             cctx,
+		ContainerdClient: containerdClient,
+	}
 	exp := New(DC, "/tmp/dc", ram, c, logrus.StandardLogger())
 	re, err := exp.Export()
 	if err != nil {
@@ -45,7 +58,18 @@ func TestExportDockerCompose(t *testing.T) {
 func TestExportRAM(t *testing.T) {
 	var ram v1alpha1.RainbondApplicationConfig
 	json.Unmarshal([]byte(kongRAM), &ram)
-	c, _ := client.NewEnvClient()
+	//c, _ := client.NewEnvClient()
+	containerdClient, err := containerd.New("/run/containerd/containerd.sock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cctx := namespaces.WithNamespace(context.Background(), "rainbond")
+	imageService := containerdClient.ImageService()
+	c := ContainerdAPI{
+		ImageService:     imageService,
+		CCtx:             cctx,
+		ContainerdClient: containerdClient,
+	}
 	exp := New(RAM, "/tmp/dc", ram, c, logrus.StandardLogger())
 	re, err := exp.Export()
 	if err != nil {
