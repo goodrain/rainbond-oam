@@ -19,12 +19,13 @@
 package export
 
 import (
+	"context"
 	"fmt"
-	"path"
-
-	"github.com/docker/docker/client"
+	"github.com/containerd/containerd"
+	"github.com/containerd/containerd/images"
 	"github.com/goodrain/rainbond-oam/pkg/ram/v1alpha1"
 	"github.com/sirupsen/logrus"
+	"path"
 )
 
 //AppLocalExport export local package
@@ -37,6 +38,12 @@ type Result struct {
 	PackagePath   string
 	PackageName   string
 	PackageFormat string
+}
+
+type ContainerdAPI struct {
+	ImageService     images.Store
+	CCtx             context.Context
+	ContainerdClient *containerd.Client
 }
 
 //AppFormat app spec format
@@ -52,13 +59,13 @@ var (
 )
 
 //New new exporter
-func New(format AppFormat, homePath string, ram v1alpha1.RainbondApplicationConfig, client *client.Client, logger *logrus.Logger) AppLocalExport {
+func New(format AppFormat, homePath string, ram v1alpha1.RainbondApplicationConfig, ctr ContainerdAPI, logger *logrus.Logger) AppLocalExport {
 	switch format {
 	case RAM:
 		return &ramExporter{
 			logger:     logger,
 			ram:        ram,
-			client:     client,
+			ctr:        ctr,
 			mode:       "offline",
 			homePath:   homePath,
 			exportPath: path.Join(homePath, fmt.Sprintf("%s-%s-ram", ram.AppName, ram.AppVersion)),
@@ -67,15 +74,15 @@ func New(format AppFormat, homePath string, ram v1alpha1.RainbondApplicationConf
 		return &dockerComposeExporter{
 			logger:     logger,
 			ram:        ram,
-			client:     client,
+			ctr:        ctr,
 			homePath:   homePath,
 			exportPath: path.Join(homePath, fmt.Sprintf("%s-%s-dockercompose", ram.AppName, ram.AppVersion)),
 		}
-	case SLG :
+	case SLG:
 		return &slugExporter{
 			logger:     logger,
 			ram:        ram,
-			client:     client,
+			ctr:        ctr,
 			mode:       "offline",
 			homePath:   homePath,
 			exportPath: path.Join(homePath, fmt.Sprintf("%s-%s-slug", ram.AppName, ram.AppVersion)),
