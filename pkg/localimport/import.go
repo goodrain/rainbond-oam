@@ -19,17 +19,15 @@
 package localimport
 
 import (
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"github.com/containerd/containerd"
-	"github.com/containerd/containerd/errdefs"
-	cdocker "github.com/containerd/containerd/remotes/docker"
-	"github.com/containerd/containerd/remotes/docker/config"
+	dockercli "github.com/docker/docker/client"
 	"github.com/goodrain/rainbond-oam/pkg/export"
 	"github.com/goodrain/rainbond-oam/pkg/ram/v1alpha1"
 	"github.com/goodrain/rainbond-oam/pkg/util"
 	"github.com/goodrain/rainbond-oam/pkg/util/docker"
+	"github.com/goodrain/rainbond-oam/pkg/util/image"
 	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"os"
@@ -43,18 +41,23 @@ type AppLocalImport interface {
 }
 
 //New new
-func New(logger *logrus.Logger, ctr export.ContainerdAPI, homeDir string) AppLocalImport {
-	return &ramImport{
-		logger:  logger,
-		ctr:     ctr,
-		homeDir: homeDir,
+func New(logger *logrus.Logger, containerdCli *containerd.Client, dockerCli *dockercli.Client, homeDir string) (AppLocalImport, error) {
+	imageClient, err := image.NewClient(containerdCli, dockerCli)
+	if err != nil {
+		logger.Errorf("create image client error: %v", err)
+		return nil, err
 	}
+	return &ramImport{
+		logger:      logger,
+		imageClient: imageClient,
+		homeDir:     homeDir,
+	}, nil
 }
 
 type ramImport struct {
-	logger  *logrus.Logger
-	ctr     export.ContainerdAPI
-	homeDir string
+	logger      *logrus.Logger
+	imageClient image.Client
+	homeDir     string
 }
 
 func (r *ramImport) Import(filePath string, hubInfo v1alpha1.ImageInfo) (*v1alpha1.RainbondApplicationConfig, error) {
@@ -107,15 +110,10 @@ func (r *ramImport) Import(filePath string, hubInfo v1alpha1.ImageInfo) (*v1alph
 	allfiles := append(l1, l2...)
 	for _, f := range allfiles {
 		if strings.HasSuffix(f, ".tar") {
-			rc, err := os.Open(f)
+			err = r.imageClient.ImageLoad(f)
 			if err != nil {
 				return nil, err
 			}
-			//if err := docker.ImageLoad(r.client, f); err != nil {
-			if _, err := r.ctr.ContainerdClient.Import(r.ctr.CCtx, rc); err != nil {
-				logrus.Errorf("load image from file %s failure %s", f, err.Error())
-			}
-			rc.Close()
 			r.logger.Infof("load image from file %s success", f)
 		}
 	}
@@ -126,44 +124,26 @@ func (r *ramImport) Import(filePath string, hubInfo v1alpha1.ImageInfo) (*v1alph
 			r.logger.Errorf("parse image failure %s", err.Error())
 			return nil, err
 		}
-		image, err := r.ctr.ImageService.Get(r.ctr.CCtx, com.ShareImage)
+		err = r.imageClient.ImageTag(com.ShareImage, newImageName, 2)
 		if err != nil {
-			return nil, err
-		}
-		image.Name = newImageName
-		r.logger.Infof("-----------------1-----------------")
-		if _, err = r.ctr.ImageService.Create(r.ctr.CCtx, image); err != nil {
-			// If user has specified force and the image already exists then
-			// delete the original image and attempt to create the new one
-			if errdefs.IsAlreadyExists(err) {
-				if err = r.ctr.ImageService.Delete(r.ctr.CCtx, newImageName); err != nil {
+			//Compatibility History Version
+			if strings.Contains(err.Error(), "No such image") {
+				var saveImage string
+				saveImage, err = docker.GetOldSaveImageName(com.ShareImage, false)
+				if err != nil {
 					return nil, err
 				}
-				if _, err = r.ctr.ImageService.Create(r.ctr.CCtx, image); err != nil {
-					return nil, err
-				}
-			} else {
+				err = r.imageClient.ImageTag(saveImage, newImageName, 2)
+			}
+			if err != nil {
+				logrus.Errorf("change image %s tag to %s failure %s", com.ShareImage, newImageName, err.Error())
 				return nil, err
 			}
 		}
 		r.logger.Infof("start push image %s", newImageName)
-		defaultTLS := &tls.Config{
-			InsecureSkipVerify: true,
-		}
-
-		hostOpt := config.HostOptions{}
-		hostOpt.DefaultTLS = defaultTLS
-		hostOpt.Credentials = func(host string) (string, string, error) {
-			return hubInfo.HubUser, hubInfo.HubPassword, nil
-		}
-		options := cdocker.ResolverOptions{
-			Tracker: cdocker.NewInMemoryTracker(),
-			Hosts:   config.ConfigureHosts(r.ctr.CCtx, hostOpt),
-		}
-		r.logger.Infof("-----------------2-----------------")
-		err = r.ctr.ContainerdClient.Push(r.ctr.CCtx, image.Name, image.Target, containerd.WithResolver(cdocker.NewResolver(options)))
-		if err != nil {
-			return nil, fmt.Errorf("push image %v err:%v", image.Name, err)
+		if err := r.imageClient.ImagePush(newImageName, hubInfo.HubUser, hubInfo.HubPassword, 20); err != nil {
+			logrus.Errorf("push image %s failure %s", newImageName, err.Error())
+			return nil, err
 		}
 		r.logger.Infof("push image %s success", newImageName)
 		com.AppImage = hubInfo
@@ -176,44 +156,25 @@ func (r *ramImport) Import(filePath string, hubInfo v1alpha1.ImageInfo) (*v1alph
 			r.logger.Errorf("parse image failure %s", err.Error())
 			return nil, err
 		}
-		image, err := r.ctr.ImageService.Get(r.ctr.CCtx, plugin.ShareImage)
+		err = r.imageClient.ImageTag(plugin.ShareImage, newImageName, 2)
 		if err != nil {
-			return nil, err
-		}
-		image.Name = newImageName
-		r.logger.Infof("-----------------3-----------------")
-		if _, err = r.ctr.ImageService.Create(r.ctr.CCtx, image); err != nil {
-			// If user has specified force and the image already exists then
-			// delete the original image and attempt to create the new one
-			if errdefs.IsAlreadyExists(err) {
-				if err = r.ctr.ImageService.Delete(r.ctr.CCtx, newImageName); err != nil {
+			//Compatibility History Version
+			if strings.Contains(err.Error(), "No such image") {
+				var saveImage string
+				saveImage, err = docker.GetOldSaveImageName(plugin.ShareImage, false)
+				if err != nil {
 					return nil, err
 				}
-				if _, err = r.ctr.ImageService.Create(r.ctr.CCtx, image); err != nil {
-					return nil, err
-				}
-			} else {
+				err = r.imageClient.ImageTag(saveImage, newImageName, 2)
+			}
+			if err != nil {
+				logrus.Errorf("change image %s tag to %s failure %s", plugin.ShareImage, newImageName, err.Error())
 				return nil, err
 			}
 		}
-
-		defaultTLS := &tls.Config{
-			InsecureSkipVerify: true,
-		}
-
-		hostOpt := config.HostOptions{}
-		hostOpt.DefaultTLS = defaultTLS
-		hostOpt.Credentials = func(host string) (string, string, error) {
-			return hubInfo.HubUser, hubInfo.HubPassword, nil
-		}
-		options := cdocker.ResolverOptions{
-			Tracker: cdocker.NewInMemoryTracker(),
-			Hosts:   config.ConfigureHosts(r.ctr.CCtx, hostOpt),
-		}
-
-		r.logger.Infof("-----------------4-----------------")
-		err = r.ctr.ContainerdClient.Push(r.ctr.CCtx, image.Name, image.Target, containerd.WithResolver(cdocker.NewResolver(options)))
-		if err != nil {
+		r.logger.Infof("start push image %s", newImageName)
+		if err := r.imageClient.ImagePush(newImageName, hubInfo.HubUser, hubInfo.HubPassword, 20); err != nil {
+			logrus.Errorf("push image %s failure %s", newImageName, err.Error())
 			return nil, err
 		}
 		r.logger.Infof("push image %s success", newImageName)

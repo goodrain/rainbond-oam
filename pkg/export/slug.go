@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/goodrain/rainbond-oam/pkg/util"
+	"github.com/goodrain/rainbond-oam/pkg/util/image"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -36,12 +37,12 @@ import (
 const sourceCode = "source_code"
 
 type slugExporter struct {
-	logger     *logrus.Logger
-	ram        v1alpha1.RainbondApplicationConfig
-	ctr        ContainerdAPI
-	mode       string
-	homePath   string
-	exportPath string
+	logger      *logrus.Logger
+	ram         v1alpha1.RainbondApplicationConfig
+	imageClient image.Client
+	mode        string
+	homePath    string
+	exportPath  string
 }
 
 func (s *slugExporter) Export() (*Result, error) {
@@ -155,24 +156,16 @@ func (s *slugExporter) saveComponents() error {
 		componentName := unicode2zh(component.ServiceCname)
 		if component.ShareImage != "" {
 			// app is image type
-			localImageName, err := pullImage(s.ctr, component, s.logger)
+			_, err := s.imageClient.ImagePull(component.ShareImage, component.AppImage.HubUser, component.AppImage.HubPassword, 30)
 			if err != nil {
 				return err
 			}
 			s.logger.Infof("pull component %s image success", componentName)
-			componentImageNames = append(componentImageNames, localImageName)
+			componentImageNames = append(componentImageNames, component.ShareImage)
 		}
 	}
 	start := time.Now()
-	//ctx := context.Background()
-	//err := docker.MultiImageSave(ctx, s.client, fmt.Sprintf("%s/component-images.tar", s.exportPath), componentImageNames...)
-	w, err := os.Create(fmt.Sprintf("%s/component-images.tar", s.exportPath))
-	if err != nil {
-		logrus.Errorf("Failed to create file(%v) : %s", componentImageNames, err)
-		return err
-	}
-	defer w.Close()
-	err = saveImage(s.ctr, w, componentImageNames)
+	err := s.imageClient.ImageSave(fmt.Sprintf("%s/component-images.tar", s.exportPath), componentImageNames)
 	if err != nil {
 		logrus.Errorf("Failed to save image(%v) : %s", componentImageNames, err)
 		return err
