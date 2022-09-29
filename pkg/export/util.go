@@ -19,16 +19,10 @@
 package export
 
 import (
-	"crypto/tls"
 	"fmt"
-	"github.com/containerd/containerd"
-	"github.com/containerd/containerd/images/archive"
-	"github.com/containerd/containerd/remotes/docker"
-	"github.com/containerd/containerd/remotes/docker/config"
 	"github.com/goodrain/rainbond-oam/pkg/ram/v1alpha1"
 	"github.com/mozillazg/go-pinyin"
 	"github.com/sirupsen/logrus"
-	"io"
 	"io/ioutil"
 	"os"
 	"path"
@@ -92,77 +86,6 @@ func unicode2zh(uText string) (context string) {
 	context = strings.TrimSpace(context)
 
 	return context
-}
-func saveImage(ctr ContainerdAPI, w io.Writer, ImageNames []string) error {
-	logrus.Infof("---------------------打包镜像----------------------")
-	logrus.Infof("%v", ImageNames)
-	var exportOpts []archive.ExportOpt
-	for _, imageName := range ImageNames {
-		exportOpts = append(exportOpts, archive.WithImage(ctr.ImageService, imageName))
-	}
-	err := ctr.ContainerdClient.Export(ctr.CCtx, w, exportOpts...)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func pullImage(ctr ContainerdAPI, component *v1alpha1.Component, log *logrus.Logger) (string, error) {
-	// docker pull image-name
-	//_, err := docker.ImagePull(client, component.ShareImage, component.AppImage.HubUser, component.AppImage.HubPassword, 30)
-	defaultTLS := &tls.Config{
-		InsecureSkipVerify: true,
-	}
-
-	hostOpt := config.HostOptions{}
-	hostOpt.DefaultTLS = defaultTLS
-	hostOpt.Credentials = func(host string) (string, string, error) {
-		return component.AppImage.HubUser, component.AppImage.HubPassword, nil
-	}
-	options := docker.ResolverOptions{
-		Tracker: docker.NewInMemoryTracker(),
-		Hosts:   config.ConfigureHosts(ctr.CCtx, hostOpt),
-	}
-
-	pullOpts := []containerd.RemoteOpt{
-		containerd.WithPullUnpack,
-		containerd.WithResolver(docker.NewResolver(options)),
-	}
-	_, err := ctr.ContainerdClient.Pull(ctr.CCtx, component.ShareImage, pullOpts...)
-	if err != nil {
-		log.Errorf("plugin image %s by user %s failure %s", component.ShareImage, component.AppImage.HubUser, err.Error())
-		return "", err
-	}
-	return component.ShareImage, nil
-}
-
-func pullPluginImage(ctr ContainerdAPI, plugin *v1alpha1.Plugin, log *logrus.Logger) (string, error) {
-	// docker pull image-name
-	//_, err := docker.ImagePull(client, plugin.ShareImage, plugin.PluginImage.HubUser, plugin.PluginImage.HubPassword, 30)
-	defaultTLS := &tls.Config{
-		InsecureSkipVerify: true,
-	}
-
-	hostOpt := config.HostOptions{}
-	hostOpt.DefaultTLS = defaultTLS
-	hostOpt.Credentials = func(host string) (string, string, error) {
-		return plugin.PluginImage.HubUser, plugin.PluginImage.HubPassword, nil
-	}
-	options := docker.ResolverOptions{
-		Tracker: docker.NewInMemoryTracker(),
-		Hosts:   config.ConfigureHosts(ctr.CCtx, hostOpt),
-	}
-
-	pullOpts := []containerd.RemoteOpt{
-		containerd.WithPullUnpack,
-		containerd.WithResolver(docker.NewResolver(options)),
-	}
-	_, err := ctr.ContainerdClient.Pull(ctr.CCtx, plugin.ShareImage, pullOpts...)
-	if err != nil {
-		log.Errorf("plugin image %s by user %s failure %s", plugin.ShareImage, plugin.PluginImage.HubUser, err.Error())
-		return "", err
-	}
-	return plugin.ShareImage, nil
 }
 
 // GetMemoryType returns the memory type based on the given memory size.

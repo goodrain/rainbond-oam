@@ -20,6 +20,7 @@ package export
 
 import (
 	"fmt"
+	"github.com/goodrain/rainbond-oam/pkg/util/image"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -33,11 +34,11 @@ import (
 )
 
 type dockerComposeExporter struct {
-	logger     *logrus.Logger
-	ram        v1alpha1.RainbondApplicationConfig
-	ctr        ContainerdAPI
-	homePath   string
-	exportPath string
+	logger      *logrus.Logger
+	ram         v1alpha1.RainbondApplicationConfig
+	imageClient image.Client
+	homePath    string
+	exportPath  string
 }
 
 func (d *dockerComposeExporter) Export() (*Result, error) {
@@ -97,24 +98,16 @@ func (d *dockerComposeExporter) saveComponents() error {
 		}
 		if component.ShareImage != "" {
 			// app is image type
-			localImageName, err := pullImage(d.ctr, component, d.logger)
+			_, err := d.imageClient.ImagePull(component.ShareImage, component.AppImage.HubUser, component.AppImage.HubPassword, 30)
 			if err != nil {
 				return err
 			}
 			d.logger.Infof("pull component %s image success", componentName)
-			componentImageNames = append(componentImageNames, localImageName)
+			componentImageNames = append(componentImageNames, component.ShareImage)
 		}
 	}
 	start := time.Now()
-	//ctx := context.Background()
-	//err := docker.MultiImageSave(ctx, d.client, fmt.Sprintf("%s/component-images.tar", d.exportPath), componentImageNames...)
-	w, err := os.Create(fmt.Sprintf("%s/component-images.tar", d.exportPath))
-	if err != nil {
-		logrus.Errorf("Failed to create file(%v) : %s", componentImageNames, err)
-		return err
-	}
-	defer w.Close()
-	err = saveImage(d.ctr, w, componentImageNames)
+	err := d.imageClient.ImageSave(fmt.Sprintf("%s/component-images.tar", d.exportPath), componentImageNames)
 	if err != nil {
 		logrus.Errorf("Failed to save image(%v) : %s", componentImageNames, err)
 		return err

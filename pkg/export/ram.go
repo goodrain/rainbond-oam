@@ -21,8 +21,8 @@ package export
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/goodrain/rainbond-oam/pkg/util/image"
 	"io/ioutil"
-	"os"
 	"os/exec"
 	"path"
 	"time"
@@ -32,12 +32,12 @@ import (
 )
 
 type ramExporter struct {
-	logger     *logrus.Logger
-	ram        v1alpha1.RainbondApplicationConfig
-	ctr        ContainerdAPI
-	mode       string
-	homePath   string
-	exportPath string
+	logger      *logrus.Logger
+	ram         v1alpha1.RainbondApplicationConfig
+	imageClient image.Client
+	mode        string
+	homePath    string
+	exportPath  string
 }
 
 func (r *ramExporter) Export() (*Result, error) {
@@ -79,24 +79,16 @@ func (r *ramExporter) saveComponents() error {
 		componentName := unicode2zh(component.ServiceCname)
 		if component.ShareImage != "" {
 			// app is image type
-			localImageName, err := pullImage(r.ctr, component, r.logger)
+			_, err := r.imageClient.ImagePull(component.ShareImage, component.AppImage.HubUser, component.AppImage.HubPassword, 30)
 			if err != nil {
 				return err
 			}
 			r.logger.Infof("pull component %s image success", componentName)
-			componentImageNames = append(componentImageNames, localImageName)
+			componentImageNames = append(componentImageNames, component.ShareImage)
 		}
 	}
 	start := time.Now()
-	//ctx := context.Background()
-	//err := docker.MultiImageSave(ctx, r.client, fmt.Sprintf("%s/component-images.tar", r.exportPath), componentImageNames...)
-	w, err := os.Create(fmt.Sprintf("%s/component-images.tar", r.exportPath))
-	if err != nil {
-		logrus.Errorf("Failed to create file(%v) : %s", componentImageNames, err)
-		return err
-	}
-	defer w.Close()
-	err = saveImage(r.ctr, w, componentImageNames)
+	err := r.imageClient.ImageSave(fmt.Sprintf("%s/component-images.tar", r.exportPath), componentImageNames)
 	if err != nil {
 		logrus.Errorf("Failed to save image(%v) : %s", componentImageNames, err)
 		return err
@@ -110,24 +102,16 @@ func (r *ramExporter) savePlugins() error {
 	for _, plugin := range r.ram.Plugins {
 		if plugin.ShareImage != "" {
 			// app is image type
-			localImageName, err := pullPluginImage(r.ctr, plugin, r.logger)
+			_, err := r.imageClient.ImagePull(plugin.ShareImage, plugin.PluginImage.HubUser, plugin.PluginImage.HubPassword, 30)
 			if err != nil {
 				return err
 			}
 			r.logger.Infof("pull plugin %s image success", plugin.PluginName)
-			pluginImageNames = append(pluginImageNames, localImageName)
+			pluginImageNames = append(pluginImageNames, plugin.ShareImage)
 		}
 	}
 	start := time.Now()
-	//ctx := context.Background()
-	//err := docker.MultiImageSave(ctx, r.client, fmt.Sprintf("%s/plugins-images.tar", r.exportPath), pluginImageNames...)
-	w, err := os.Create(fmt.Sprintf("%s/plugins-images.tar", r.exportPath))
-	if err != nil {
-		logrus.Errorf("Failed to create file(%v) : %s", pluginImageNames, err)
-		return err
-	}
-	defer w.Close()
-	err = saveImage(r.ctr, w, pluginImageNames)
+	err := r.imageClient.ImageSave(fmt.Sprintf("%s/plugin-images.tar", r.exportPath), pluginImageNames)
 	if err != nil {
 		logrus.Errorf("Failed to save image(%v) : %s", pluginImageNames, err)
 		return err

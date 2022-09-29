@@ -103,7 +103,7 @@ func (c *containerWorkloadBuilder) buildVolumes(volumes v1alpha1.ComponentVolume
 			Name:          volume.VolumeName,
 			MountPath:     volume.VolumeMountPath,
 			AccessMode:    NewVolumeAccess(volume.AccessMode),
-			SharingPolicy: NewSharingPolicy(volume.SharingPolicy),
+			SharingPolicy: NewSharingPolicy(volume.SharePolicy),
 			Disk:          &v1alpha2.DiskResource{},
 		}
 		if volume.VolumeCapacity > 0 {
