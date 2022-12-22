@@ -23,7 +23,6 @@ import (
 	"github.com/goodrain/rainbond-oam/pkg/util/image"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"time"
 
@@ -67,8 +66,11 @@ func (d *dockerComposeExporter) Export() (*Result, error) {
 	}
 	d.logger.Infof("success build start script")
 	// packaging
-	name, err := d.packaging()
+	packageName := fmt.Sprintf("%s-%s-dockercompose.tar.gz", d.ram.AppName, d.ram.AppVersion)
+	name, err := Packaging(packageName, d.homePath, d.exportPath)
 	if err != nil {
+		err = fmt.Errorf("Failed to package app %s: %s ", packageName, err.Error())
+		d.logger.Error(err)
 		return nil, err
 	}
 	d.logger.Infof("success export app " + d.ram.AppName)
@@ -206,19 +208,6 @@ func (d *dockerComposeExporter) buildStartScript() error {
 		return err
 	}
 	return nil
-}
-
-func (d *dockerComposeExporter) packaging() (string, error) {
-	packageName := fmt.Sprintf("%s-%s-dockercompose.tar.gz", d.ram.AppName, d.ram.AppVersion)
-
-	cmd := exec.Command("tar", "-czf", path.Join(d.homePath, packageName), path.Base(d.exportPath))
-	cmd.Dir = d.homePath
-	if err := cmd.Run(); err != nil {
-		err = fmt.Errorf("Failed to package app %s: %s ", packageName, err.Error())
-		d.logger.Error(err)
-		return "", err
-	}
-	return packageName, nil
 }
 
 //DockerComposeYaml -

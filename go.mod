@@ -7,15 +7,17 @@ require (
 	github.com/crossplane/oam-kubernetes-runtime v0.1.0
 	github.com/docker/distribution v2.7.1+incompatible
 	github.com/docker/docker v1.13.1
-	github.com/google/uuid v1.2.0
 	github.com/mozillazg/go-pinyin v0.18.0
 	github.com/opencontainers/image-spec v1.0.2
+	github.com/pkg/errors v0.9.1
 	github.com/pquerna/ffjson v0.0.0-20190930134022-aa0246cd15f7
 	github.com/sirupsen/logrus v1.8.1
 	golang.org/x/net v0.0.0-20211209124913-491a49abca63
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.20.6
 	k8s.io/apimachinery v0.23.12
+	sigs.k8s.io/yaml v1.2.0
 )
 
 require (
@@ -39,6 +41,7 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-cmp v0.5.6 // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
+	github.com/google/uuid v1.2.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.11.13 // indirect
 	github.com/moby/locker v1.0.1 // indirect
@@ -50,12 +53,10 @@ require (
 	github.com/opencontainers/runtime-spec v1.0.3-0.20210326190908-1c3f411f0417 // indirect
 	github.com/opencontainers/selinux v1.10.1 // indirect
 	github.com/pelletier/go-toml v1.8.1 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/russross/blackfriday/v2 v2.0.1 // indirect
 	github.com/shurcooL/sanitized_anchor_name v1.0.0 // indirect
 	github.com/urfave/cli v1.22.2 // indirect
 	go.opencensus.io v0.22.3 // indirect
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.0.0-20220412211240-33da011f77ad // indirect
 	golang.org/x/text v0.3.7 // indirect
 	google.golang.org/genproto v0.0.0-20201110150050-8816d57aaa9a // indirect

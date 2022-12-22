@@ -21,17 +21,14 @@ package export
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/goodrain/rainbond-oam/pkg/ram/v1alpha1"
 	"github.com/goodrain/rainbond-oam/pkg/util"
 	"github.com/goodrain/rainbond-oam/pkg/util/image"
+	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"strings"
-	"time"
-
-	"github.com/goodrain/rainbond-oam/pkg/ram/v1alpha1"
-	"github.com/sirupsen/logrus"
 )
 
 const sourceCode = "source_code"
@@ -55,7 +52,7 @@ func (s *slugExporter) Export() (*Result, error) {
 	s.logger.Infof("success prepare export dir")
 	if s.mode == "offline" {
 		// Save components attachments
-		if err := s.saveComponents(); err != nil {
+		if err := SaveComponents(s.ram, s.imageClient, s.exportPath, s.logger); err != nil {
 			return nil, err
 		}
 		s.logger.Infof("success save components")
@@ -142,36 +139,15 @@ func (s *slugExporter) Export() (*Result, error) {
 		return nil, err
 	}
 	// packaging
-	name, err := s.packaging()
+	packageName := fmt.Sprintf("%s-%s-slug.tar.gz", s.ram.AppName, s.ram.AppVersion)
+	name, err := Packaging(packageName, s.homePath, s.exportPath)
 	if err != nil {
+		err = fmt.Errorf("Failed to package app %s: %s ", packageName, err.Error())
+		s.logger.Error(err)
 		return nil, err
 	}
 	s.logger.Infof("success export app " + s.ram.AppName)
 	return &Result{PackagePath: path.Join(s.homePath, name), PackageName: name}, nil
-}
-
-func (s *slugExporter) saveComponents() error {
-	var componentImageNames []string
-	for _, component := range s.ram.Components {
-		componentName := unicode2zh(component.ServiceCname)
-		if component.ShareImage != "" {
-			// app is image type
-			_, err := s.imageClient.ImagePull(component.ShareImage, component.AppImage.HubUser, component.AppImage.HubPassword, 30)
-			if err != nil {
-				return err
-			}
-			s.logger.Infof("pull component %s image success", componentName)
-			componentImageNames = append(componentImageNames, component.ShareImage)
-		}
-	}
-	start := time.Now()
-	err := s.imageClient.ImageSave(fmt.Sprintf("%s/component-images.tar", s.exportPath), componentImageNames)
-	if err != nil {
-		logrus.Errorf("Failed to save image(%v) : %s", componentImageNames, err)
-		return err
-	}
-	s.logger.Infof("save component images success, Take %s time", time.Now().Sub(start))
-	return nil
 }
 
 func (s *slugExporter) writeEnvFile(component *v1alpha1.Component, slugPath string, AppConfigGroups []*v1alpha1.AppConfigGroup) error {
@@ -228,19 +204,6 @@ func (s *slugExporter) writeEnvFile(component *v1alpha1.Component, slugPath stri
 		return err
 	}
 	return nil
-}
-
-func (s *slugExporter) packaging() (string, error) {
-	packageName := fmt.Sprintf("%s-%s-slug.tar.gz", s.ram.AppName, s.ram.AppVersion)
-
-	cmd := exec.Command("tar", "-czf", path.Join(s.homePath, packageName), path.Base(s.exportPath))
-	cmd.Dir = s.homePath
-	if err := cmd.Run(); err != nil {
-		err = fmt.Errorf("Failed to package app %s: %s ", packageName, err.Error())
-		s.logger.Error(err)
-		return "", err
-	}
-	return packageName, nil
 }
 
 func (s *slugExporter) writeRunScript(slugPath string, name string) error {

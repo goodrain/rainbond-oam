@@ -21,6 +21,8 @@ package util
 import (
 	"bufio"
 	"fmt"
+	"github.com/goodrain/rainbond-oam/pkg/util/zip"
+	"github.com/google/uuid"
 	"io"
 	"io/ioutil"
 	"log"
@@ -31,9 +33,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-
-	"github.com/goodrain/rainbond-oam/pkg/util/zip"
-	"github.com/google/uuid"
 )
 
 //NewUUID new uuid string
