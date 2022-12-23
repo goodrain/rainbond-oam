@@ -50,6 +50,8 @@ var (
 	DC AppFormat = "docker-compose"
 	//SC -
 	SLG AppFormat = "slug"
+	//HELM
+	HELM AppFormat = "helm-chart"
 )
 
 //New new exporter
@@ -85,6 +87,15 @@ func New(format AppFormat, homePath string, ram v1alpha1.RainbondApplicationConf
 			mode:        "offline",
 			homePath:    homePath,
 			exportPath:  path.Join(homePath, fmt.Sprintf("%s-%s-slug", ram.AppName, ram.AppVersion)),
+		}, nil
+	case HELM:
+		return &helmChartExporter{
+			logger:      logger,
+			ram:         ram,
+			imageClient: imageClient,
+			mode:        "offline",
+			homePath:    homePath,
+			exportPath:  path.Join(homePath, fmt.Sprintf("%s-%s-helm", ram.AppName, ram.AppVersion)),
 		}, nil
 	default:
 		panic("not support app format")

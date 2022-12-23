@@ -21,14 +21,17 @@ package export
 import (
 	"fmt"
 	"github.com/goodrain/rainbond-oam/pkg/ram/v1alpha1"
+	"github.com/goodrain/rainbond-oam/pkg/util/image"
 	"github.com/mozillazg/go-pinyin"
 	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -122,4 +125,60 @@ func exportComponentConfigFile(serviceDir string, v v1alpha1.ComponentVolume) er
 	dir := path.Dir(filename)
 	os.MkdirAll(dir, 0755)
 	return ioutil.WriteFile(filename, []byte(v.FileConent), 0644)
+}
+
+func SaveComponents(ram v1alpha1.RainbondApplicationConfig, imageClient image.Client, exportPath string, logger *logrus.Logger) error {
+	var componentImageNames []string
+	for _, component := range ram.Components {
+		componentName := unicode2zh(component.ServiceCname)
+		if component.ShareImage != "" {
+			// app is image type
+			_, err := imageClient.ImagePull(component.ShareImage, component.AppImage.HubUser, component.AppImage.HubPassword, 30)
+			if err != nil {
+				return err
+			}
+			logger.Infof("pull component %s image success", componentName)
+			componentImageNames = append(componentImageNames, component.ShareImage)
+		}
+	}
+	start := time.Now()
+	err := imageClient.ImageSave(fmt.Sprintf("%s/component-images.tar", exportPath), componentImageNames)
+	if err != nil {
+		logrus.Errorf("Failed to save image(%v) : %s", componentImageNames, err)
+		return err
+	}
+	logger.Infof("save component images success, Take %s time", time.Now().Sub(start))
+	return nil
+}
+
+func SavePlugins(ram v1alpha1.RainbondApplicationConfig, imageClient image.Client, exportPath string, logger *logrus.Logger) error {
+	var pluginImageNames []string
+	for _, plugin := range ram.Plugins {
+		if plugin.ShareImage != "" {
+			// app is image type
+			_, err := imageClient.ImagePull(plugin.ShareImage, plugin.PluginImage.HubUser, plugin.PluginImage.HubPassword, 30)
+			if err != nil {
+				return err
+			}
+			logger.Infof("pull plugin %s image success", plugin.PluginName)
+			pluginImageNames = append(pluginImageNames, plugin.ShareImage)
+		}
+	}
+	start := time.Now()
+	err := imageClient.ImageSave(fmt.Sprintf("%s/plugin-images.tar", exportPath), pluginImageNames)
+	if err != nil {
+		logrus.Errorf("Failed to save image(%v) : %s", pluginImageNames, err)
+		return err
+	}
+	logger.Infof("save plugin images success, Take %s time", time.Now().Sub(start))
+	return nil
+}
+
+func Packaging(packageName, homePath, exportPath string) (string, error) {
+	cmd := exec.Command("tar", "-czf", path.Join(homePath, packageName), path.Base(exportPath))
+	cmd.Dir = homePath
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
+	return packageName, nil
 }
