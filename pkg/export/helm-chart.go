@@ -109,7 +109,7 @@ func (h *helmChartExporter) writeTemplateYaml(helmChartPath string) error {
 		unstructuredObject.SetResourceVersion("")
 		unstructuredObject.SetCreationTimestamp(metav1.Time{})
 		unstructuredObject.SetUID("")
-		unstructuredYaml, err := yaml.Marshal(unstructuredObject)
+		unstructuredYaml, err := yaml.Marshal(&unstructuredObject)
 		if err != nil {
 			return err
 		}
