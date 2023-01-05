@@ -162,6 +162,7 @@ type Component struct {
 	ServiceConnectInfoMapList []ComponentEnv            `json:"service_connect_info_map_list"`
 	ServiceVolumeMapList      ComponentVolumeList       `json:"service_volume_map_list"`
 	Version                   string                    `json:"version"`
+	K8SComponentName          string                    `json:"k8s_component_name"`
 	Ports                     []ComponentPort           `json:"port_map_list"`
 	ServiceName               string                    `json:"service_name"`
 	Category                  string                    `json:"category"`
