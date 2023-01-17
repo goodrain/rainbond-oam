@@ -127,7 +127,7 @@ func exportComponentConfigFile(serviceDir string, v v1alpha1.ComponentVolume) er
 	return ioutil.WriteFile(filename, []byte(v.FileConent), 0644)
 }
 
-func SaveComponents(ram v1alpha1.RainbondApplicationConfig, imageClient image.Client, exportPath string, logger *logrus.Logger) error {
+func SaveComponents(ram v1alpha1.RainbondApplicationConfig, imageClient image.Client, exportPath string, logger *logrus.Logger, dependentImages []string) error {
 	var componentImageNames []string
 	for _, component := range ram.Components {
 		componentName := unicode2zh(component.ServiceCname)
@@ -142,6 +142,12 @@ func SaveComponents(ram v1alpha1.RainbondApplicationConfig, imageClient image.Cl
 		}
 	}
 	start := time.Now()
+	for _, dependentImage := range dependentImages {
+		if dependentImage == "" {
+			continue
+		}
+		componentImageNames = append(componentImageNames, dependentImage)
+	}
 	err := imageClient.ImageSave(fmt.Sprintf("%s/component-images.tar", exportPath), componentImageNames)
 	if err != nil {
 		logrus.Errorf("Failed to save image(%v) : %s", componentImageNames, err)

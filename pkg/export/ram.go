@@ -47,7 +47,7 @@ func (r *ramExporter) Export() (*Result, error) {
 	r.logger.Infof("success prepare export dir")
 	if r.mode == "offline" {
 		// Save components attachments
-		if err := SaveComponents(r.ram, r.imageClient, r.exportPath, r.logger); err != nil {
+		if err := SaveComponents(r.ram, r.imageClient, r.exportPath, r.logger, []string{}); err != nil {
 			return nil, err
 		}
 		r.logger.Infof("success save components")
