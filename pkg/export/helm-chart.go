@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"sigs.k8s.io/yaml"
+	"strings"
 	"time"
 )
 
@@ -29,7 +30,11 @@ type helmChartExporter struct {
 
 func (h *helmChartExporter) Export() (*Result, error) {
 	h.logger.Infof("start export app %s to helm chart spec", h.ram.AppName)
-	if err := SaveComponents(h.ram, h.imageClient, h.exportPath, h.logger); err != nil {
+	dependentImages, err := h.initHelmChart()
+	if err != nil {
+		return nil, err
+	}
+	if err := SaveComponents(h.ram, h.imageClient, h.exportPath, h.logger, dependentImages); err != nil {
 		h.logger.Errorf("helm chart export save component failure %v", err)
 		return nil, err
 	}
@@ -39,9 +44,6 @@ func (h *helmChartExporter) Export() (*Result, error) {
 		return nil, err
 	}
 	h.logger.Infof("success save plugins")
-	if err := h.initHelmChart(); err != nil {
-		return nil, err
-	}
 	packageName := fmt.Sprintf("%s-%s-helm.tar.gz", h.ram.AppName, h.ram.AppVersion)
 	name, err := Packaging(packageName, h.homePath, h.exportPath)
 	if err != nil {
@@ -53,23 +55,32 @@ func (h *helmChartExporter) Export() (*Result, error) {
 	return &Result{PackagePath: path.Join(h.homePath, name), PackageName: name}, nil
 }
 
-func (h *helmChartExporter) initHelmChart() error {
+func (h *helmChartExporter) initHelmChart() ([]string, error) {
 	helmChartPath := path.Join(h.exportPath, h.ram.AppName)
 	err := h.writeChartYaml(helmChartPath)
 	if err != nil {
 		h.logger.Errorf("%v writeChartYaml failure %v", h.ram.AppName, err)
-		return err
+		return nil, err
 	}
 	h.logger.Infof("writeChartYaml success")
 	for i := 0; i < 40; i++ {
 		time.Sleep(1 * time.Second)
-		if CheckFileExist(path.Join(helmChartPath, "end.yaml")) {
-			h.logger.Infof("end.yaml creeate success")
+		if CheckFileExist(path.Join(helmChartPath, "dependent_image.txt")) {
+			h.logger.Infof("dependent_image.txt creeate success")
 			break
 		}
 	}
-
-	return h.writeTemplateYaml(helmChartPath)
+	content, err := os.ReadFile(path.Join(helmChartPath, "dependent_image.txt"))
+	if err != nil {
+		h.logger.Errorf("read file dependent_image.txt failure %v", err)
+		return nil, err
+	}
+	dependentImages := strings.Split(string(content), "\n")
+	err = h.writeTemplateYaml(helmChartPath)
+	if err != nil {
+		return nil, err
+	}
+	return dependentImages, nil
 }
 
 type ChartYaml struct {

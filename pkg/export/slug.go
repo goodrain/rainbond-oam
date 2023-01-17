@@ -52,7 +52,7 @@ func (s *slugExporter) Export() (*Result, error) {
 	s.logger.Infof("success prepare export dir")
 	if s.mode == "offline" {
 		// Save components attachments
-		if err := SaveComponents(s.ram, s.imageClient, s.exportPath, s.logger); err != nil {
+		if err := SaveComponents(s.ram, s.imageClient, s.exportPath, s.logger, []string{}); err != nil {
 			return nil, err
 		}
 		s.logger.Infof("success save components")
