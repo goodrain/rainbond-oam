@@ -81,8 +81,8 @@ func (s *RainbondApplicationConfig) HandleNullValue() {
 
 //Validation validation app templete
 func (s *RainbondApplicationConfig) Validation() error {
-	if len(s.Components) == 0 {
-		return fmt.Errorf("no app in templete")
+	if len(s.Components) == 0 && len(s.K8sResources) == 0 {
+		return fmt.Errorf("template is empty")
 	}
 	for _, app := range s.Components {
 		if err := app.Validation(); err != nil {
