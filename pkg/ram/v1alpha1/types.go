@@ -261,6 +261,7 @@ type ComponentPort struct {
 	ContainerPort int    `json:"container_port"`
 	IsOuter       bool   `json:"is_outer_service"`
 	IsInner       bool   `json:"is_inner_service"`
+	Name          string `json:"name"`
 }
 
 //ComponentEnv env
