@@ -171,6 +171,7 @@ type Component struct {
 	DeployVersion             string                    `json:"deploy_version"`
 	ExtendMethodRule          ComponentExtendMethodRule `json:"extend_method_map"`
 	ServiceType               string                    `json:"service_type"`
+	Arch                      string                    `json:"arch"`
 	ServiceCname              string                    `json:"service_cname"`
 	ShareImage                string                    `json:"share_image"`
 	Image                     string                    `json:"image"`
