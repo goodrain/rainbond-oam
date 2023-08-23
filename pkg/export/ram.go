@@ -47,16 +47,19 @@ func (r *ramExporter) Export() (*Result, error) {
 	r.logger.Infof("success prepare export dir")
 	if r.mode == "offline" {
 		// Save components attachments
-		if err := SaveComponents(r.ram, r.imageClient, r.exportPath, r.logger, []string{}); err != nil {
-			return nil, err
+		if len(r.ram.Components) > 0 {
+			if err := SaveComponents(r.ram, r.imageClient, r.exportPath, r.logger, []string{}); err != nil {
+				return nil, err
+			}
+			r.logger.Infof("success save components")
 		}
-		r.logger.Infof("success save components")
-		// Save plugin attachments
-		if err := SavePlugins(r.ram, r.imageClient, r.exportPath, r.logger); err != nil {
-			return nil, err
+		if len(r.ram.Plugins) > 0 {
+			if err := SavePlugins(r.ram, r.imageClient, r.exportPath, r.logger); err != nil {
+				return nil, err
+			}
+			r.logger.Infof("success save plugins")
 		}
 	}
-	r.logger.Infof("success save plugins")
 	if err := r.writeMetaFile(); err != nil {
 		return nil, err
 	}
