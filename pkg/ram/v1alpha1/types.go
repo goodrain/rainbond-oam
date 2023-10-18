@@ -21,8 +21,6 @@ package v1alpha1
 import (
 	"encoding/json"
 	"fmt"
-	"time"
-
 	"github.com/goodrain/rainbond-oam/pkg/util"
 )
 
@@ -291,11 +289,11 @@ type ComponentExtendMethodRule struct {
 }
 
 type ComponentReport struct {
-	PrimaryLink string    `json:"primary_link"`
-	Level       int       `json:"level"`
-	Message     string    `json:"message"`
-	Type        string    `json:"type"`
-	CreateTime  time.Time `json:"create_time"`
+	PrimaryLink string `json:"primary_link"`
+	Level       string `json:"level"`
+	Message     string `json:"message"`
+	Type        string `json:"type"`
+	CreateTime  string `json:"create_time"`
 }
 
 //DefaultExtendMethodRule default Scaling rules
