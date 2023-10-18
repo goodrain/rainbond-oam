@@ -21,6 +21,7 @@ package v1alpha1
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/goodrain/rainbond-oam/pkg/util"
 )
@@ -172,6 +173,7 @@ type Component struct {
 	ExtendMethodRule          ComponentExtendMethodRule `json:"extend_method_map"`
 	ServiceType               string                    `json:"service_type"`
 	Arch                      string                    `json:"arch"`
+	Reports                   []ComponentReport         `json:"report"`
 	ServiceCname              string                    `json:"service_cname"`
 	ShareImage                string                    `json:"share_image"`
 	Image                     string                    `json:"image"`
@@ -286,6 +288,14 @@ type ComponentExtendMethodRule struct {
 	MaxNode    int `json:"max_node"`
 	MinMemory  int `json:"min_memory"`
 	InitMemory int `json:"init_memory"`
+}
+
+type ComponentReport struct {
+	PrimaryLink string    `json:"primary_link"`
+	Level       int       `json:"level"`
+	Message     string    `json:"message"`
+	Type        string    `json:"type"`
+	CreateTime  time.Time `json:"create_time"`
 }
 
 //DefaultExtendMethodRule default Scaling rules
