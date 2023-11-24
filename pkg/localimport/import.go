@@ -109,7 +109,7 @@ func (r *ramImport) Import(filePath string, hubInfo v1alpha1.ImageInfo) (*v1alph
 	}
 	allfiles := append(l1, l2...)
 	for _, f := range allfiles {
-		if strings.HasSuffix(f, "plugin-images.tar") && len(ram.Plugins) == 0 {
+		if strings.HasSuffix(f, "plugins-images.tar") && len(ram.Plugins) == 0 {
 			continue
 		}
 		if strings.HasSuffix(f, ".tar") {
