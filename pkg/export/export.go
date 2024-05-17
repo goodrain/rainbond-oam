@@ -52,6 +52,8 @@ var (
 	SLG AppFormat = "slug"
 	//HELM
 	HELM AppFormat = "helm-chart"
+	//CPK
+	CPK AppFormat = "cpk"
 )
 
 //New new exporter
@@ -96,6 +98,15 @@ func New(format AppFormat, homePath string, ram v1alpha1.RainbondApplicationConf
 			mode:        "offline",
 			homePath:    homePath,
 			exportPath:  path.Join(homePath, fmt.Sprintf("%s-%s-helm", ram.AppName, ram.AppVersion)),
+		}, nil
+	case CPK:
+		return &cpkExporter{
+			logger:      logger,
+			ram:         ram,
+			imageClient: imageClient,
+			mode:        "offline",
+			homePath:    homePath,
+			exportPath:  path.Join(homePath, fmt.Sprintf("%s-%s-cpk", ram.AppName, ram.AppVersion)),
 		}, nil
 	default:
 		panic("not support app format")
