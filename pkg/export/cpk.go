@@ -294,7 +294,7 @@ func getFileImageJsonData(component *v1alpha1.Component) (string, error) {
 	for _, vo := range component.ServiceVolumeMapList {
 		volumes = append(volumes, cpk.Volume{
 			ContainerPath: vo.VolumeMountPath,
-			HostPath:      path.Join(component.K8SComponentName, vo.VolumeMountPath),
+			HostPath:      fmt.Sprintf("%v/", path.Join("/grdata", component.K8SComponentName, vo.VolumeMountPath)),
 			Mode:          "RW",
 		})
 	}
