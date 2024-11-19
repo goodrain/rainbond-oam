@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"github.com/goodrain/rainbond-oam/pkg/util/zip"
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"log"
@@ -134,11 +135,14 @@ func Unzip(archive, target string) error {
 	return nil
 }
 
-//Untar tar -zxvf
 func Untar(archive, target string) error {
 	cmd := exec.Command("tar", "-xzf", archive, "-C", target)
-	if err := cmd.Run(); err != nil {
-		return err
+	// 获取标准输出和标准错误
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// 打印错误和输出信息
+		logrus.Errorf("Error executing tar command: %v, Output: %s", err, string(output))
+		return fmt.Errorf("untar failed: %w, output: %s", err, string(output))
 	}
 	return nil
 }
