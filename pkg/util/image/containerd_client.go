@@ -168,65 +168,83 @@ func (c *containerdImageCliImpl) ImagePush(image, user, pass string, timeout int
 			}
 		}
 	}
-	NewTracker := docker.NewInMemoryTracker()
-	options := docker.ResolverOptions{
-		Tracker: NewTracker,
+
+	// 定义一个函数用于推送镜像
+	pushImage := func(hostOptions config.HostOptions) error {
+		NewTracker := docker.NewInMemoryTracker()
+		options := docker.ResolverOptions{
+			Tracker: NewTracker,
+			Hosts:   config.ConfigureHosts(ctx, hostOptions),
+		}
+		resolver := docker.NewResolver(options)
+		ongoing := newPushJobs(NewTracker)
+
+		eg, ctx := errgroup.WithContext(ctx)
+		doneCh := make(chan struct{}) // 用于通知进度显示的完成
+		eg.Go(func() error {
+			defer close(doneCh)
+			jobHandler := images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
+				ongoing.add(remotes.MakeRefKey(ctx, desc))
+				return nil, nil
+			})
+
+			ropts := []containerd.RemoteOpt{
+				containerd.WithResolver(resolver),
+				containerd.WithImageHandler(jobHandler),
+			}
+			return c.client.Push(ctx, reference, desc, ropts...)
+		})
+
+		eg.Go(func() error {
+			var (
+				ticker = time.NewTicker(100 * time.Millisecond)
+				fw     = progress.NewWriter(os.Stdout)
+				start  = time.Now()
+				done   bool
+			)
+			defer ticker.Stop()
+
+			for {
+				select {
+				case <-ticker.C:
+					fw.Flush()
+					tw := tabwriter.NewWriter(fw, 1, 8, 1, ' ', 0)
+					ctrcontent.Display(tw, ongoing.status(), start)
+					tw.Flush()
+					if done {
+						fw.Flush()
+						return nil
+					}
+				case <-doneCh:
+					done = true
+				case <-ctx.Done():
+					done = true // allow UI to update once more
+				}
+			}
+		})
+		return eg.Wait()
 	}
+
+	// 第一次尝试使用 HTTPS 协议推送镜像
 	hostOptions := config.HostOptions{
 		DefaultTLS: &tls.Config{
 			InsecureSkipVerify: true,
 		},
+		Credentials: func(host string) (string, string, error) {
+			return user, pass, nil
+		},
 	}
-	hostOptions.Credentials = func(host string) (string, string, error) {
-		return user, pass, nil
+	err = pushImage(hostOptions)
+	if err != nil {
+		// 如果失败，使用 HTTP 协议再次尝试推送镜像
+		fmt.Printf("HTTPS push failed, retrying with HTTP: %v\n", err)
+		hostOptions.DefaultTLS = nil // 移除 TLS 配置以使用 HTTP 协议
+		err = pushImage(hostOptions)
+		if err != nil {
+			return errors.Wrap(err, "failed to push image using HTTP after HTTPS failed")
+		}
 	}
-	options.Hosts = config.ConfigureHosts(ctx, hostOptions)
-	resolver := docker.NewResolver(options)
-	ongoing := newPushJobs(NewTracker)
 
-	eg, ctx := errgroup.WithContext(ctx)
-	// used to notify the progress writer
-	doneCh := make(chan struct{})
-	eg.Go(func() error {
-		defer close(doneCh)
-		jobHandler := images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
-			ongoing.add(remotes.MakeRefKey(ctx, desc))
-			return nil, nil
-		})
-
-		ropts := []containerd.RemoteOpt{
-			containerd.WithResolver(resolver),
-			containerd.WithImageHandler(jobHandler),
-		}
-		return c.client.Push(ctx, reference, desc, ropts...)
-	})
-	eg.Go(func() error {
-		var (
-			ticker = time.NewTicker(100 * time.Millisecond)
-			fw     = progress.NewWriter(os.Stdout)
-			start  = time.Now()
-			done   bool
-		)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				fw.Flush()
-				tw := tabwriter.NewWriter(fw, 1, 8, 1, ' ', 0)
-				ctrcontent.Display(tw, ongoing.status(), start)
-				tw.Flush()
-				if done {
-					fw.Flush()
-					return nil
-				}
-			case <-doneCh:
-				done = true
-			case <-ctx.Done():
-				done = true // allow ui to update once more
-			}
-		}
-	})
 	return nil
 }
 
