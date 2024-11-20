@@ -239,6 +239,7 @@ func (c *containerdImageCliImpl) ImagePush(image, user, pass string, timeout int
 		// 如果失败，使用 HTTP 协议再次尝试推送镜像
 		fmt.Printf("HTTPS push failed, retrying with HTTP: %v\n", err)
 		hostOptions.DefaultTLS = nil // 移除 TLS 配置以使用 HTTP 协议
+		hostOptions.DefaultScheme = "http"
 		err = pushImage(hostOptions)
 		if err != nil {
 			return errors.Wrap(err, "failed to push image using HTTP after HTTPS failed")
