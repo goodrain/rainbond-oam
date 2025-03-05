@@ -20,9 +20,11 @@ package util
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"github.com/goodrain/rainbond-oam/pkg/util/zip"
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"log"
@@ -35,14 +37,14 @@ import (
 	"strings"
 )
 
-//NewUUID new uuid string
+// NewUUID new uuid string
 func NewUUID() string {
 	return strings.Replace(uuid.New().String(), "-", "", -1)
 }
 
 var reg = regexp.MustCompile(`(?U)\$\{.*\}`)
 
-//ParseVariable parse and replace variable in source str
+// ParseVariable parse and replace variable in source str
 func ParseVariable(source string, configs map[string]string) string {
 	resultKey := reg.FindAllString(source, -1)
 	for _, sourcekey := range resultKey {
@@ -73,7 +75,7 @@ func getVariableKey(source string) (key, value string) {
 	return k, ""
 }
 
-//Unzip archive file to target dir
+// Unzip archive file to target dir
 func Unzip(archive, target string) error {
 	reader, err := zip.OpenDirectReader(archive)
 	if err != nil {
@@ -134,16 +136,19 @@ func Unzip(archive, target string) error {
 	return nil
 }
 
-//Untar tar -zxvf
+// Untar tar -zxvf
 func Untar(archive, target string) error {
 	cmd := exec.Command("tar", "-xzf", archive, "-C", target)
+	logrus.Infof("untar cmd: [%s]", cmd.String())
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return err
+		return fmt.Errorf("failed to untar app %s, error is [%s] , stderr is [%s]", archive, err.Error(), stderr.String())
 	}
 	return nil
 }
 
-//UnImagetar image-tar
+// UnImagetar image-tar
 func UnImagetar(archive, target string) error {
 	cmd := exec.Command("tar", "-xf", archive, "-C", target)
 	if err := cmd.Run(); err != nil {
@@ -152,7 +157,7 @@ func UnImagetar(archive, target string) error {
 	return nil
 }
 
-//GetFileList -
+// GetFileList -
 func GetFileList(dirpath string, level int) ([]string, error) {
 	var dirlist []string
 	list, err := ioutil.ReadDir(dirpath)

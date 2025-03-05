@@ -19,6 +19,7 @@
 package export
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/goodrain/rainbond-oam/pkg/ram/v1alpha1"
 	"github.com/goodrain/rainbond-oam/pkg/util/image"
@@ -113,7 +114,7 @@ var memoryLabels = map[int]string{
 	65536: "64xlarge",
 }
 
-//PrepareExportDir -
+// PrepareExportDir -
 func PrepareExportDir(exportPath string) error {
 	os.RemoveAll(exportPath)
 	return os.MkdirAll(exportPath, 0755)
@@ -182,9 +183,16 @@ func SavePlugins(ram v1alpha1.RainbondApplicationConfig, imageClient image.Clien
 
 func Packaging(packageName, homePath, exportPath string) (string, error) {
 	cmd := exec.Command("tar", "-czf", path.Join(homePath, packageName), path.Base(exportPath))
+	logrus.Infof("package cmd: [%s]", cmd.String())
 	cmd.Dir = homePath
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return "", err
+		if strings.Contains(stderr.String(), "file changed as we read it") {
+			logrus.Warnf("Ignored changed files warning: %s", stderr.String())
+			return packageName, nil // 返回成功但记录警告
+		}
+		return "", fmt.Errorf("error is [%s] , stderr is [%s]", err.Error(), stderr.String())
 	}
 	return packageName, nil
 }
