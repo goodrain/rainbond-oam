@@ -134,14 +134,17 @@ func SaveComponents(ram v1alpha1.RainbondApplicationConfig, imageClient image.Cl
 		componentName := unicode2zh(component.ServiceCname)
 		if component.ShareImage != "" {
 			// app is image type
+			logger.Infof("pulling component %s image: %s", componentName, component.ShareImage)
 			_, err := imageClient.ImagePull(component.ShareImage, component.AppImage.HubUser, component.AppImage.HubPassword, 30)
 			if err != nil {
-				return err
+				logger.Errorf("failed to pull component %s image %s: %v", componentName, component.ShareImage, err)
+				return fmt.Errorf("failed to pull component %s image %s: %w", componentName, component.ShareImage, err)
 			}
 			logger.Infof("pull component %s image success", componentName)
 			componentImageNames = append(componentImageNames, component.ShareImage)
 		}
 	}
+
 	start := time.Now()
 	for _, dependentImage := range dependentImages {
 		if dependentImage == "" {
@@ -149,12 +152,19 @@ func SaveComponents(ram v1alpha1.RainbondApplicationConfig, imageClient image.Cl
 		}
 		componentImageNames = append(componentImageNames, dependentImage)
 	}
+
+	if len(componentImageNames) == 0 {
+		logger.Warnf("no component images to save, skipping component-images.tar creation")
+		return nil
+	}
+
+	logger.Infof("saving %d component images to tar", len(componentImageNames))
 	err := imageClient.ImageSave(fmt.Sprintf("%s/component-images.tar", exportPath), componentImageNames)
 	if err != nil {
 		logrus.Errorf("Failed to save image(%v) : %s", componentImageNames, err)
-		return err
+		return fmt.Errorf("failed to save component images: %w", err)
 	}
-	logger.Infof("save component images success, Take %s time", time.Now().Sub(start))
+	logger.Infof("save component images success, took %s", time.Now().Sub(start))
 	return nil
 }
 
@@ -163,36 +173,84 @@ func SavePlugins(ram v1alpha1.RainbondApplicationConfig, imageClient image.Clien
 	for _, plugin := range ram.Plugins {
 		if plugin.ShareImage != "" {
 			// app is image type
+			logger.Infof("pulling plugin %s image: %s", plugin.PluginName, plugin.ShareImage)
 			_, err := imageClient.ImagePull(plugin.ShareImage, plugin.PluginImage.HubUser, plugin.PluginImage.HubPassword, 30)
 			if err != nil {
-				return err
+				logger.Errorf("failed to pull plugin %s image %s: %v", plugin.PluginName, plugin.ShareImage, err)
+				return fmt.Errorf("failed to pull plugin %s image %s: %w", plugin.PluginName, plugin.ShareImage, err)
 			}
 			logger.Infof("pull plugin %s image success", plugin.PluginName)
 			pluginImageNames = append(pluginImageNames, plugin.ShareImage)
 		}
 	}
+
+	if len(pluginImageNames) == 0 {
+		logger.Warnf("no plugin images to save, skipping plugin-images.tar creation")
+		return nil
+	}
+
 	start := time.Now()
+	logger.Infof("saving %d plugin images to tar", len(pluginImageNames))
 	err := imageClient.ImageSave(fmt.Sprintf("%s/plugin-images.tar", exportPath), pluginImageNames)
 	if err != nil {
 		logrus.Errorf("Failed to save image(%v) : %s", pluginImageNames, err)
-		return err
+		return fmt.Errorf("failed to save plugin images: %w", err)
 	}
-	logger.Infof("save plugin images success, Take %s time", time.Now().Sub(start))
+	logger.Infof("save plugin images success, took %s", time.Now().Sub(start))
 	return nil
 }
 
 func Packaging(packageName, homePath, exportPath string) (string, error) {
-	cmd := exec.Command("tar", "-czf", path.Join(homePath, packageName), path.Base(exportPath))
-	logrus.Infof("package cmd: [%s]", cmd.String())
+	// Verify export directory exists before packaging
+	targetDir := path.Base(exportPath)
+	fullExportPath := path.Join(homePath, targetDir)
+
+	logrus.Infof("Preparing to package: exportPath=%s, homePath=%s, targetDir=%s", exportPath, homePath, targetDir)
+
+	// Check if directory exists
+	if info, err := os.Stat(fullExportPath); err != nil {
+		return "", fmt.Errorf("export directory %s does not exist: %v", fullExportPath, err)
+	} else if !info.IsDir() {
+		return "", fmt.Errorf("export path %s is not a directory", fullExportPath)
+	}
+
+	// List directory contents for debugging
+	if entries, err := ioutil.ReadDir(fullExportPath); err == nil {
+		logrus.Infof("Export directory %s contains %d entries", fullExportPath, len(entries))
+		for i, entry := range entries {
+			if i < 5 { // Log first 5 entries
+				logrus.Debugf("  - %s (size: %d, isDir: %v)", entry.Name(), entry.Size(), entry.IsDir())
+			}
+		}
+		if len(entries) == 0 {
+			logrus.Warnf("Export directory %s is empty", fullExportPath)
+		}
+	}
+
+	cmd := exec.Command("tar", "-czf", path.Join(homePath, packageName), targetDir)
+	logrus.Infof("package cmd: [%s], working dir: [%s]", cmd.String(), homePath)
 	cmd.Dir = homePath
 	var stderr bytes.Buffer
+	var stdout bytes.Buffer
 	cmd.Stderr = &stderr
+	cmd.Stdout = &stdout
+
 	if err := cmd.Run(); err != nil {
 		if strings.Contains(stderr.String(), "file changed as we read it") {
 			logrus.Warnf("Ignored changed files warning: %s", stderr.String())
 			return packageName, nil // 返回成功但记录警告
 		}
-		return "", fmt.Errorf("error is [%s] , stderr is [%s]", err.Error(), stderr.String())
+		logrus.Errorf("tar command failed - stdout: [%s], stderr: [%s]", stdout.String(), stderr.String())
+		return "", fmt.Errorf("tar command failed: %v, stdout: [%s], stderr: [%s]", err, stdout.String(), stderr.String())
 	}
+
+	// Verify the tar file was created
+	tarPath := path.Join(homePath, packageName)
+	if info, err := os.Stat(tarPath); err != nil {
+		return "", fmt.Errorf("tar file %s was not created: %v", tarPath, err)
+	} else {
+		logrus.Infof("Successfully created package %s (size: %d bytes)", tarPath, info.Size())
+	}
+
 	return packageName, nil
 }
