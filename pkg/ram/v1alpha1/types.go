@@ -48,6 +48,8 @@ type RainbondApplicationConfig struct {
 	K8sResources       []*K8sResource       `json:"k8s_resources,omitempty"`
 	GovernanceMode     string               `json:"governance_mode" default:"BUILD_IN_SERVICE_MESH"`
 	HelmChart          map[string]string    `json:"helm_chart,omitempty"`
+	GroupDevStatus     string               `json:"group_dev_status,omitempty"`
+	PlatformPlugin     *PlatformPlugin      `json:"platform_plugin,omitempty"`
 }
 
 // K8sResource The running environment of an application mainly refers to the k8s resources created under the application
@@ -57,6 +59,19 @@ type K8sResource struct {
 	Kind string `json:"kind"`
 	// Yaml file for the storage resource
 	Content string `json:"content"`
+}
+
+// PlatformPlugin platform plugin info
+type PlatformPlugin struct {
+	IsPlatformPlugin   bool     `json:"is_platform_plugin"`
+	PluginID           string   `json:"plugin_id,omitempty"`
+	PluginName         string   `json:"plugin_name,omitempty"`
+	PluginType         string   `json:"plugin_type,omitempty"`
+	FrontendComponent  string   `json:"frontend_component,omitempty"`
+	EntryPath          string   `json:"entry_path,omitempty"`
+	InjectPosition     []string `json:"inject_position,omitempty"`
+	MenuTitle          string   `json:"menu_title,omitempty"`
+	RoutePath          string   `json:"route_path,omitempty"`
 }
 
 //HandleNullValue handle null value

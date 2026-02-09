@@ -7,6 +7,7 @@ require (
 	github.com/crossplane/oam-kubernetes-runtime v0.1.0
 	github.com/docker/distribution v2.7.1+incompatible
 	github.com/docker/docker v1.13.1
+	github.com/google/uuid v1.2.0
 	github.com/mozillazg/go-pinyin v0.18.0
 	github.com/opencontainers/image-spec v1.0.2
 	github.com/pkg/errors v0.9.1
@@ -41,7 +42,6 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-cmp v0.5.6 // indirect
 	github.com/google/gofuzz v1.1.0 // indirect
-	github.com/google/uuid v1.2.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.11.13 // indirect
 	github.com/moby/locker v1.0.1 // indirect
@@ -70,4 +70,8 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
 )
 
-replace k8s.io/api v0.20.4 => k8s.io/api v0.23.12
+replace (
+	github.com/mitchellh/osext => github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
+	k8s.io/api v0.20.4 => k8s.io/api v0.23.12
+	vbom.ml/util => github.com/fvbommel/util v0.0.0-20180919145318-efcd4e0f9787
+)
