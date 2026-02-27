@@ -271,13 +271,14 @@ type ImageInfo struct {
 
 //ComponentPort port
 type ComponentPort struct {
-	PortAlias     string `json:"port_alias"`
-	Protocol      string `json:"protocol"`
-	TenantID      string `json:"tenant_id"`
-	ContainerPort int    `json:"container_port"`
-	IsOuter       bool   `json:"is_outer_service"`
-	IsInner       bool   `json:"is_inner_service"`
-	Name          string `json:"name"`
+	PortAlias      string `json:"port_alias"`
+	Protocol       string `json:"protocol"`
+	TenantID       string `json:"tenant_id"`
+	ContainerPort  int    `json:"container_port"`
+	IsOuter        bool   `json:"is_outer_service"`
+	IsInner        bool   `json:"is_inner_service"`
+	Name           string `json:"name"`
+	K8sServiceName string `json:"k8s_service_name"`
 }
 
 //ComponentEnv env
