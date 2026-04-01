@@ -9,6 +9,7 @@ require (
 	github.com/docker/docker v1.13.1
 	github.com/google/uuid v1.2.0
 	github.com/mozillazg/go-pinyin v0.18.0
+	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.0.2
 	github.com/pkg/errors v0.9.1
 	github.com/pquerna/ffjson v0.0.0-20190930134022-aa0246cd15f7
@@ -48,7 +49,6 @@ require (
 	github.com/moby/sys/mountinfo v0.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
-	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/runc v1.1.4 // indirect
 	github.com/opencontainers/runtime-spec v1.0.3-0.20210326190908-1c3f411f0417 // indirect
 	github.com/opencontainers/selinux v1.10.1 // indirect

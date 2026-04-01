@@ -32,18 +32,10 @@ type containerdImageCliImpl struct {
 	client *containerd.Client
 }
 
-//ImageSave save image to tar file
+// ImageSave save image to tar file
 // destination destination file name eg. /tmp/xxx.tar
 func (c *containerdImageCliImpl) ImageSave(destination string, images []string) error {
-	var exportOpts []archive.ExportOpt
-	for _, image := range images {
-		ref, err := refdocker.ParseDockerRef(image)
-		if err != nil {
-			logrus.Errorf("parse image %s error %s", image, err.Error())
-			continue
-		}
-		exportOpts = append(exportOpts, archive.WithImage(c.client.ImageService(), ref.String()))
-	}
+	exportOpts := buildImageExportOpts(c.client.ImageService(), images)
 	ctx := namespaces.WithNamespace(context.Background(), Namespace)
 	w, err := os.Create(destination)
 	if err != nil {
@@ -51,6 +43,21 @@ func (c *containerdImageCliImpl) ImageSave(destination string, images []string) 
 	}
 	defer w.Close()
 	return c.client.Export(ctx, w, exportOpts...)
+}
+
+func buildImageExportOpts(store images.Store, imageNames []string) []archive.ExportOpt {
+	exportOpts := []archive.ExportOpt{
+		archive.WithPlatform(platforms.Default()),
+	}
+	for _, imageName := range imageNames {
+		ref, err := refdocker.ParseDockerRef(imageName)
+		if err != nil {
+			logrus.Errorf("parse image %s error %s", imageName, err.Error())
+			continue
+		}
+		exportOpts = append(exportOpts, archive.WithImage(store, ref.String()))
+	}
+	return exportOpts
 }
 
 func (c *containerdImageCliImpl) ImagePull(image string, username, password string, timeout int) (*ocispec.ImageConfig, error) {
@@ -289,7 +296,7 @@ func (j *pushjobs) status() []ctrcontent.StatusInfo {
 	return statuses
 }
 
-//ImageTag change docker image tag
+// ImageTag change docker image tag
 func (c *containerdImageCliImpl) ImageTag(source, target string, timeout int) error {
 	srcNamed, err := refdocker.ParseDockerRef(source)
 	if err != nil {
