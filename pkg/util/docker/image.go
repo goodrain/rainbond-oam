@@ -43,12 +43,17 @@ var ErrorNoAuth = fmt.Errorf("pull image require docker login")
 // ErrorNoImage error no image
 var ErrorNoImage = fmt.Errorf("image not exist")
 
+type registryAuthConfig struct {
+	Username string `json:"username,omitempty"`
+	Password string `json:"password,omitempty"`
+}
+
 // ImagePull pull docker image
 // timeout minutes of the unit
 func ImagePull(dockerCli *client.Client, image string, username, password string, timeout int) (*types.ImageInspect, error) {
 	var pullipo types.ImagePullOptions
 	if username != "" && password != "" {
-		auth, err := EncodeAuthToBase64(types.AuthConfig{Username: username, Password: password})
+		auth, err := EncodeAuthToBase64(registryAuthConfig{Username: username, Password: password})
 		if err != nil {
 			logrus.Errorf("make auth base63 push image error: %s", err.Error())
 			return nil, err
@@ -131,7 +136,7 @@ func ImagePush(dockerCli *client.Client, image, username, password string, timeo
 	}
 	var pushipo types.ImagePushOptions
 	if username != "" && password != "" {
-		auth, err := EncodeAuthToBase64(types.AuthConfig{Username: username, Password: password})
+		auth, err := EncodeAuthToBase64(registryAuthConfig{Username: username, Password: password})
 		if err != nil {
 			logrus.Errorf("make auth base63 push image error: %s", err.Error())
 			return err
@@ -233,7 +238,7 @@ func CheckTrustedRepositories(image, user, pass string) error {
 }
 
 // EncodeAuthToBase64 serializes the auth configuration as JSON base64 payload
-func EncodeAuthToBase64(authConfig types.AuthConfig) (string, error) {
+func EncodeAuthToBase64(authConfig registryAuthConfig) (string, error) {
 	buf, err := json.Marshal(authConfig)
 	if err != nil {
 		return "", err
