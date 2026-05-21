@@ -39,6 +39,10 @@ type ramExporter struct {
 
 func (r *ramExporter) Export() (*Result, error) {
 	r.logger.Infof("start export app %s to ram app spec", r.ram.AppName)
+	r.ram.HandleNullValue()
+	if err := r.ram.Validation(); err != nil {
+		return nil, err
+	}
 	// Delete the old application group directory and then regenerate the application package
 	if err := PrepareExportDir(r.exportPath); err != nil {
 		r.logger.Errorf("prepare export dir failure %s", err.Error())

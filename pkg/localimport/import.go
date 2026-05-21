@@ -35,12 +35,12 @@ import (
 	"strings"
 )
 
-//AppLocalImport import
+// AppLocalImport import
 type AppLocalImport interface {
 	Import(filePath string, hubInfo v1alpha1.ImageInfo) (*v1alpha1.RainbondApplicationConfig, error)
 }
 
-//New new
+// New new
 func New(logger *logrus.Logger, containerdCli *containerd.Client, dockerCli *dockercli.Client, homeDir string) (AppLocalImport, error) {
 	imageClient, err := image.NewClient(containerdCli, dockerCli)
 	if err != nil {
@@ -58,6 +58,21 @@ type ramImport struct {
 	logger      *logrus.Logger
 	imageClient image.Client
 	homeDir     string
+}
+
+func rewriteComponentVMImageReferences(component *v1alpha1.Component, previousImage, newImage string) {
+	if component == nil || component.VM == nil {
+		return
+	}
+	for i := range component.VM.DiskLayout {
+		disk := &component.VM.DiskLayout[i]
+		if disk.SourceType != v1alpha1.VMDiskSourceRegistry {
+			continue
+		}
+		if disk.Image == previousImage || (disk.Image == "" && disk.DiskRole == v1alpha1.VMDiskRoleRoot) {
+			disk.Image = newImage
+		}
+	}
 }
 
 func (r *ramImport) Import(filePath string, hubInfo v1alpha1.ImageInfo) (*v1alpha1.RainbondApplicationConfig, error) {
@@ -96,6 +111,10 @@ func (r *ramImport) Import(filePath string, hubInfo v1alpha1.ImageInfo) (*v1alph
 	if err := json.NewDecoder(metaFile).Decode(&ram); err != nil {
 		return nil, fmt.Errorf("Failed to read meta file : %v", err)
 	}
+	ram.HandleNullValue()
+	if err := ram.Validation(); err != nil {
+		return nil, fmt.Errorf("invalid ram meta file: %v", err)
+	}
 	// load all component images and plugin images
 	//after v5.3 package
 	l1, err := util.GetFileList(path.Join(r.homeDir, files[0].Name()), 1)
@@ -125,24 +144,25 @@ func (r *ramImport) Import(filePath string, hubInfo v1alpha1.ImageInfo) (*v1alph
 	}
 	for _, com := range ram.Components {
 		// new hub info
-		newImageName, err := docker.NewImageName(com.ShareImage, hubInfo)
+		previousImage := com.ShareImage
+		newImageName, err := docker.NewImageName(previousImage, hubInfo)
 		if err != nil {
 			r.logger.Errorf("parse image failure %s", err.Error())
 			return nil, err
 		}
-		err = r.imageClient.ImageTag(com.ShareImage, newImageName, 2)
+		err = r.imageClient.ImageTag(previousImage, newImageName, 2)
 		if err != nil {
 			//Compatibility History Version
 			if strings.Contains(err.Error(), "No such image") {
 				var saveImage string
-				saveImage, err = docker.GetOldSaveImageName(com.ShareImage, false)
+				saveImage, err = docker.GetOldSaveImageName(previousImage, false)
 				if err != nil {
 					return nil, err
 				}
 				err = r.imageClient.ImageTag(saveImage, newImageName, 2)
 			}
 			if err != nil {
-				logrus.Errorf("change image %s tag to %s failure %s", com.ShareImage, newImageName, err.Error())
+				logrus.Errorf("change image %s tag to %s failure %s", previousImage, newImageName, err.Error())
 				return nil, err
 			}
 		}
@@ -154,6 +174,7 @@ func (r *ramImport) Import(filePath string, hubInfo v1alpha1.ImageInfo) (*v1alph
 		r.logger.Infof("push image %s success", newImageName)
 		com.AppImage = hubInfo
 		com.ShareImage = newImageName
+		rewriteComponentVMImageReferences(com, previousImage, newImageName)
 	}
 	for i, plugin := range ram.Plugins {
 		// new hub info

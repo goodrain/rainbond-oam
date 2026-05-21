@@ -22,14 +22,69 @@ import (
 	"os"
 	"testing"
 
+	"github.com/containerd/containerd"
 	"github.com/docker/docker/client"
 	"github.com/goodrain/rainbond-oam/pkg/ram/v1alpha1"
 	"github.com/sirupsen/logrus"
 )
 
+func TestRewriteComponentVMImageReferences(t *testing.T) {
+	component := &v1alpha1.Component{
+		ShareImage: "docker.io/library/vmexport-test:qcow2-v1",
+		VM: &v1alpha1.VMTemplate{
+			DiskLayout: []v1alpha1.VMDiskLayoutItem{
+				{
+					DiskKey:    "disk",
+					DiskRole:   v1alpha1.VMDiskRoleRoot,
+					SourceType: v1alpha1.VMDiskSourceRegistry,
+					Image:      "docker.io/library/vmexport-test:qcow2-v1",
+				},
+				{
+					DiskKey:    "data1",
+					DiskRole:   v1alpha1.VMDiskRoleData,
+					SourceType: v1alpha1.VMDiskSourceRegistry,
+					Image:      "docker.io/library/other-data:v1",
+				},
+			},
+		},
+	}
+
+	rewriteComponentVMImageReferences(component, component.ShareImage, "registry.example.com/team/vmexport-test:qcow2-v1")
+
+	if got := component.VM.DiskLayout[0].Image; got != "registry.example.com/team/vmexport-test:qcow2-v1" {
+		t.Fatalf("expected root disk image to be rewritten, got %s", got)
+	}
+	if got := component.VM.DiskLayout[1].Image; got != "docker.io/library/other-data:v1" {
+		t.Fatalf("expected unrelated data disk image to stay unchanged, got %s", got)
+	}
+}
+
+func TestRewriteComponentVMImageReferencesBackfillsEmptyRootDiskImage(t *testing.T) {
+	component := &v1alpha1.Component{
+		ShareImage: "docker.io/library/vmexport-test:qcow2-v1",
+		VM: &v1alpha1.VMTemplate{
+			DiskLayout: []v1alpha1.VMDiskLayoutItem{
+				{
+					DiskKey:    "disk",
+					DiskRole:   v1alpha1.VMDiskRoleRoot,
+					SourceType: v1alpha1.VMDiskSourceRegistry,
+					Image:      "",
+				},
+			},
+		},
+	}
+
+	rewriteComponentVMImageReferences(component, component.ShareImage, "registry.example.com/team/vmexport-test:qcow2-v1")
+
+	if got := component.VM.DiskLayout[0].Image; got != "registry.example.com/team/vmexport-test:qcow2-v1" {
+		t.Fatalf("expected empty root disk image to be backfilled, got %s", got)
+	}
+}
+
 func TestImport(t *testing.T) {
+	t.Skip("manual integration test")
 	c, _ := client.NewEnvClient()
-	im := New(logrus.StandardLogger(), c, "/tmp/ram/default")
+	im, _ := New(logrus.StandardLogger(), (*containerd.Client)(nil), c, "/tmp/ram/default")
 	info, err := im.Import("/Users/barnett/Downloads/默认应用-1.0-ram.tar.gz", v1alpha1.ImageInfo{
 		HubPassword: os.Getenv("PASS"),
 		Namespace:   "test",

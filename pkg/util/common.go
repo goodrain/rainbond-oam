@@ -241,7 +241,7 @@ func CopyDir(src string, dest string) error {
 	}
 	outPut, err := cmd.Output()
 	if err != nil {
-		fmt.Println("Output error: %s", err.Error())
+		fmt.Printf("Output error: %s\n", err.Error())
 		return err
 	}
 	fmt.Println(outPut)

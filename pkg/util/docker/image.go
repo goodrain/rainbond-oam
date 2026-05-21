@@ -31,25 +31,24 @@ import (
 
 	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/registry"
 	"github.com/docker/docker/client"
 	"github.com/goodrain/rainbond-oam/pkg/ram/v1alpha1"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 
-//ErrorNoAuth error no auth
+// ErrorNoAuth error no auth
 var ErrorNoAuth = fmt.Errorf("pull image require docker login")
 
-//ErrorNoImage error no image
+// ErrorNoImage error no image
 var ErrorNoImage = fmt.Errorf("image not exist")
 
-//ImagePull pull docker image
-//timeout minutes of the unit
+// ImagePull pull docker image
+// timeout minutes of the unit
 func ImagePull(dockerCli *client.Client, image string, username, password string, timeout int) (*types.ImageInspect, error) {
 	var pullipo types.ImagePullOptions
 	if username != "" && password != "" {
-		auth, err := EncodeAuthToBase64(registry.AuthConfig{Username: username, Password: password})
+		auth, err := EncodeAuthToBase64(types.AuthConfig{Username: username, Password: password})
 		if err != nil {
 			logrus.Errorf("make auth base63 push image error: %s", err.Error())
 			return nil, err
@@ -108,7 +107,7 @@ func ImagePull(dockerCli *client.Client, image string, username, password string
 	return &ins, nil
 }
 
-//ImageTag change docker image tag
+// ImageTag change docker image tag
 func ImageTag(dockerCli *client.Client, source, target string, timeout int) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*time.Duration(timeout))
 	defer cancel()
@@ -120,8 +119,8 @@ func ImageTag(dockerCli *client.Client, source, target string, timeout int) erro
 	return nil
 }
 
-//ImagePush push image to registry
-//timeout minutes of the unit
+// ImagePush push image to registry
+// timeout minutes of the unit
 func ImagePush(dockerCli *client.Client, image, username, password string, timeout int) error {
 	if timeout < 1 {
 		timeout = 1
@@ -132,7 +131,7 @@ func ImagePush(dockerCli *client.Client, image, username, password string, timeo
 	}
 	var pushipo types.ImagePushOptions
 	if username != "" && password != "" {
-		auth, err := EncodeAuthToBase64(registry.AuthConfig{Username: username, Password: password})
+		auth, err := EncodeAuthToBase64(types.AuthConfig{Username: username, Password: password})
 		if err != nil {
 			logrus.Errorf("make auth base63 push image error: %s", err.Error())
 			return err
@@ -176,7 +175,7 @@ func ImagePush(dockerCli *client.Client, image, username, password string, timeo
 	return nil
 }
 
-//TrustedImagePush push image to trusted registry
+// TrustedImagePush push image to trusted registry
 func TrustedImagePush(dockerCli *client.Client, image, user, pass string, timeout int) error {
 	if err := CheckTrustedRepositories(image, user, pass); err != nil {
 		return err
@@ -184,7 +183,7 @@ func TrustedImagePush(dockerCli *client.Client, image, user, pass string, timeou
 	return ImagePush(dockerCli, image, user, pass, timeout)
 }
 
-//CheckTrustedRepositories check Repositories is exist ,if not create it.
+// CheckTrustedRepositories check Repositories is exist ,if not create it.
 func CheckTrustedRepositories(image, user, pass string) error {
 	ref, err := reference.ParseNormalizedNamed(image)
 	if err != nil {
@@ -234,7 +233,7 @@ func CheckTrustedRepositories(image, user, pass string) error {
 }
 
 // EncodeAuthToBase64 serializes the auth configuration as JSON base64 payload
-func EncodeAuthToBase64(authConfig registry.AuthConfig) (string, error) {
+func EncodeAuthToBase64(authConfig types.AuthConfig) (string, error) {
 	buf, err := json.Marshal(authConfig)
 	if err != nil {
 		return "", err
@@ -242,7 +241,7 @@ func EncodeAuthToBase64(authConfig registry.AuthConfig) (string, error) {
 	return base64.URLEncoding.EncodeToString(buf), nil
 }
 
-//ImageInspectWithRaw get image inspect
+// ImageInspectWithRaw get image inspect
 func ImageInspectWithRaw(dockerCli *client.Client, image string) (*types.ImageInspect, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -253,7 +252,7 @@ func ImageInspectWithRaw(dockerCli *client.Client, image string) (*types.ImageIn
 	return &ins, nil
 }
 
-//ImageSave save image to tar file
+// ImageSave save image to tar file
 // destination destination file name eg. /tmp/xxx.tar
 func ImageSave(dockerCli *client.Client, image, destination string) error {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -266,7 +265,7 @@ func ImageSave(dockerCli *client.Client, image, destination string) error {
 	return CopyToFile(destination, rc)
 }
 
-//MultiImageSave save multi image to tar file
+// MultiImageSave save multi image to tar file
 // destination destination file name eg. /tmp/xxx.tar
 func MultiImageSave(ctx context.Context, dockerCli *client.Client, destination string, images ...string) error {
 	rc, err := dockerCli.ImageSave(ctx, images)
@@ -277,7 +276,7 @@ func MultiImageSave(ctx context.Context, dockerCli *client.Client, destination s
 	return CopyToFile(destination, rc)
 }
 
-//ImageLoad load image from  tar file
+// ImageLoad load image from  tar file
 // destination destination file name eg. /tmp/xxx.tar
 func ImageLoad(dockerCli *client.Client, tarFile string) error {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -318,7 +317,7 @@ func ImageLoad(dockerCli *client.Client, tarFile string) error {
 	return nil
 }
 
-//ImageImport save image to tar file
+// ImageImport save image to tar file
 // source source file name eg. /tmp/xxx.tar
 func ImageImport(dockerCli *client.Client, image, source string) error {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -387,7 +386,7 @@ func CopyToFile(outfile string, r io.Reader) error {
 	return nil
 }
 
-//ImageRemove remove image
+// ImageRemove remove image
 func ImageRemove(dockerCli *client.Client, image string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
@@ -395,7 +394,7 @@ func ImageRemove(dockerCli *client.Client, image string) error {
 	return err
 }
 
-//GetTagFromNamedRef get image tag by name
+// GetTagFromNamedRef get image tag by name
 func GetTagFromNamedRef(ref reference.Named) string {
 	if digested, ok := ref.(reference.Digested); ok {
 		return digested.Digest().String()
@@ -407,7 +406,7 @@ func GetTagFromNamedRef(ref reference.Named) string {
 	return ""
 }
 
-//NewImageName new image name
+// NewImageName new image name
 func NewImageName(source string, hubInfo v1alpha1.ImageInfo) (string, error) {
 	ref, err := reference.ParseAnyReference(source)
 	if err != nil {
@@ -429,7 +428,7 @@ func NewImageName(source string, hubInfo v1alpha1.ImageInfo) (string, error) {
 	return newImageName, nil
 }
 
-//GetOldSaveImageName get old save image name before V5.3
+// GetOldSaveImageName get old save image name before V5.3
 func GetOldSaveImageName(source string, withDomain bool) (string, error) {
 	ref, err := reference.ParseAnyReference(source)
 	if err != nil {

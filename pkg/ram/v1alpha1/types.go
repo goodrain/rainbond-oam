@@ -33,7 +33,7 @@ const (
 	GovernanceModeIstioServiceMesh = "ISTIO_SERVICE_MESH"
 )
 
-//RainbondApplicationConfig store app version template
+// RainbondApplicationConfig store app version template
 type RainbondApplicationConfig struct {
 	AppKeyID           string               `json:"group_key"`
 	AppName            string               `json:"group_name"`
@@ -63,18 +63,18 @@ type K8sResource struct {
 
 // PlatformPlugin platform plugin info
 type PlatformPlugin struct {
-	IsPlatformPlugin   bool     `json:"is_platform_plugin"`
-	PluginID           string   `json:"plugin_id,omitempty"`
-	PluginName         string   `json:"plugin_name,omitempty"`
-	PluginType         string   `json:"plugin_type,omitempty"`
-	FrontendComponent  string   `json:"frontend_component,omitempty"`
-	EntryPath          string   `json:"entry_path,omitempty"`
-	InjectPosition     []string `json:"inject_position,omitempty"`
-	MenuTitle          string   `json:"menu_title,omitempty"`
-	RoutePath          string   `json:"route_path,omitempty"`
+	IsPlatformPlugin  bool     `json:"is_platform_plugin"`
+	PluginID          string   `json:"plugin_id,omitempty"`
+	PluginName        string   `json:"plugin_name,omitempty"`
+	PluginType        string   `json:"plugin_type,omitempty"`
+	FrontendComponent string   `json:"frontend_component,omitempty"`
+	EntryPath         string   `json:"entry_path,omitempty"`
+	InjectPosition    []string `json:"inject_position,omitempty"`
+	MenuTitle         string   `json:"menu_title,omitempty"`
+	RoutePath         string   `json:"route_path,omitempty"`
 }
 
-//HandleNullValue handle null value
+// HandleNullValue handle null value
 func (s *RainbondApplicationConfig) HandleNullValue() {
 	if s.TempleteVersion == "" {
 		s.TempleteVersion = "v2"
@@ -87,13 +87,16 @@ func (s *RainbondApplicationConfig) HandleNullValue() {
 	}
 	for i := range s.Components {
 		s.Components[i].HandleNullValue()
+		if s.Components[i].VM != nil && s.TempleteVersion == "v2" {
+			s.TempleteVersion = "v3"
+		}
 	}
 	for i := range s.Plugins {
 		s.Plugins[i].HandleNullValue()
 	}
 }
 
-//Validation validation app templete
+// Validation validation app templete
 func (s *RainbondApplicationConfig) Validation() error {
 	if len(s.Components) == 0 && len(s.K8sResources) == 0 {
 		return fmt.Errorf("template is empty")
@@ -111,41 +114,41 @@ func (s *RainbondApplicationConfig) Validation() error {
 	return nil
 }
 
-//JSON return json string
+// JSON return json string
 func (s *RainbondApplicationConfig) JSON() string {
 	body, _ := json.Marshal(s)
 	return string(body)
 }
 
-//DeployType deploy type
+// DeployType deploy type
 // TODO update it stateless_multiple, stateless_singleton
 type DeployType string
 
-//StatelessSingletionDeployType stateless
+// StatelessSingletionDeployType stateless
 var StatelessSingletionDeployType DeployType = "stateless_singleton"
 
-//StatelessMultipleDeployType -
+// StatelessMultipleDeployType -
 var StatelessMultipleDeployType DeployType = "stateless_multiple"
 
-//StateMultipleDeployType -
+// StateMultipleDeployType -
 var StateMultipleDeployType DeployType = "state_multiple"
 
-//StateSingletonDeployType state
+// StateSingletonDeployType state
 var StateSingletonDeployType DeployType = "state_singleton"
 
-//ServiceType 服务类型
+// ServiceType 服务类型
 type ServiceType string
 
-//ApplicationServiceType 普通应用
+// ApplicationServiceType 普通应用
 var ApplicationServiceType = "application"
 
-//HelmChartServiceType helm应用
+// HelmChartServiceType helm应用
 var HelmChartServiceType = "helm-chart"
 
-//ComponentVolumeList volume list
+// ComponentVolumeList volume list
 type ComponentVolumeList []ComponentVolume
 
-//Add add volume
+// Add add volume
 func (s *ComponentVolumeList) Add(volume ComponentVolume) {
 	for _, v := range *s {
 		if v.VolumeName == volume.VolumeName {
@@ -158,7 +161,7 @@ func (s *ComponentVolumeList) Add(volume ComponentVolume) {
 	*s = append(*s, volume)
 }
 
-//Component component model
+// Component component model
 type Component struct {
 	// container limit memory, unit MB
 	Memory                    int                       `json:"memory"`
@@ -198,9 +201,70 @@ type Component struct {
 	Endpoints                 Endpoints                 `json:"endpoints,omitempty"`
 	Labels                    map[string]string         `json:"labels,omitempty"`
 	ComponentK8sAttributes    []ComponentK8sAttribute   `json:"component_k8s_attributes"`
+	VM                        *VMTemplate               `json:"vm,omitempty"`
 }
 
-//HandleNullValue 处理null值
+const (
+	VMDiskRoleRoot = "root"
+	VMDiskRoleData = "data"
+
+	VMDiskSourceRegistry = "registry"
+
+	VMDiskDeviceDisk = "disk"
+)
+
+// VMTemplate stores VM publish metadata in RAM templates.
+type VMTemplate struct {
+	BootMode         string             `json:"boot_mode,omitempty"`
+	MachineType      string             `json:"machine_type,omitempty"`
+	BootSourceFormat string             `json:"boot_source_format,omitempty"`
+	DiskLayout       []VMDiskLayoutItem `json:"disk_layout,omitempty"`
+}
+
+// HandleNullValue initializes optional VM fields.
+func (s *VMTemplate) HandleNullValue() {
+	if s == nil {
+		return
+	}
+	if s.DiskLayout == nil {
+		s.DiskLayout = []VMDiskLayoutItem{}
+	}
+}
+
+// Validation validates VM publish metadata.
+func (s *VMTemplate) Validation() error {
+	if s == nil {
+		return nil
+	}
+	rootDiskCount := 0
+	for _, disk := range s.DiskLayout {
+		if disk.DiskRole == VMDiskRoleRoot {
+			rootDiskCount++
+		}
+	}
+	if rootDiskCount == 0 {
+		return fmt.Errorf("vm disk layout requires root disk")
+	}
+	return nil
+}
+
+// VMDiskLayoutItem describes one VM disk in RAM metadata.
+type VMDiskLayoutItem struct {
+	DiskKey     string `json:"disk_key,omitempty"`
+	DiskName    string `json:"disk_name,omitempty"`
+	DiskRole    string `json:"disk_role,omitempty"`
+	DeviceType  string `json:"device_type,omitempty"`
+	Bus         string `json:"bus,omitempty"`
+	OrderIndex  int    `json:"order_index,omitempty"`
+	VolumeName  string `json:"volume_name,omitempty"`
+	RequestSize string `json:"request_size,omitempty"`
+	Format      string `json:"format,omitempty"`
+	SourceType  string `json:"source_type,omitempty"`
+	Image       string `json:"image,omitempty"`
+	Checksum    string `json:"checksum,omitempty"`
+}
+
+// HandleNullValue 处理null值
 func (s *Component) HandleNullValue() {
 	if s.ServicePluginConfigs == nil {
 		s.ServicePluginConfigs = []ComponentPluginConfig{}
@@ -226,14 +290,20 @@ func (s *Component) HandleNullValue() {
 	if s.Probes == nil {
 		s.Probes = []ComponentProbe{}
 	}
+	if s.VM != nil {
+		s.VM.HandleNullValue()
+	}
 }
 
-//Validation -
+// Validation -
 func (s *Component) Validation() error {
+	if s.VM != nil {
+		return s.VM.Validation()
+	}
 	return nil
 }
 
-//ComponentProbe probe
+// ComponentProbe probe
 type ComponentProbe struct {
 	ID                 int    `json:"ID" bson:"ID"`
 	InitialDelaySecond int    `json:"initial_delay_second"`
@@ -252,7 +322,7 @@ type ComponentProbe struct {
 	Path               string `json:"path"`
 }
 
-//Validation probe validation
+// Validation probe validation
 func (s *ComponentProbe) Validation() error {
 	if s.Port == 0 && s.Cmd == "" {
 		return fmt.Errorf("probe endpoint port is 0")
@@ -260,7 +330,7 @@ func (s *ComponentProbe) Validation() error {
 	return nil
 }
 
-//ImageInfo -
+// ImageInfo -
 type ImageInfo struct {
 	HubPassword string `json:"hub_password"`
 	Namespace   string `json:"namespace"`
@@ -269,7 +339,7 @@ type ImageInfo struct {
 	IsTrust     bool   `json:"is_trust"`
 }
 
-//ComponentPort port
+// ComponentPort port
 type ComponentPort struct {
 	PortAlias      string `json:"port_alias"`
 	Protocol       string `json:"protocol"`
@@ -281,7 +351,7 @@ type ComponentPort struct {
 	K8sServiceName string `json:"k8s_service_name"`
 }
 
-//ComponentEnv env
+// ComponentEnv env
 type ComponentEnv struct {
 	AttrName  string `json:"attr_name"`
 	Name      string `json:"name"`
@@ -291,8 +361,8 @@ type ComponentEnv struct {
 	ContainerPort int32 `json:"container_port"`
 }
 
-//ComponentExtendMethodRule -
-//服务伸缩规则，目前仅包含手动伸缩的规则
+// ComponentExtendMethodRule -
+// 服务伸缩规则，目前仅包含手动伸缩的规则
 type ComponentExtendMethodRule struct {
 	MinNode    int `json:"min_node"`
 	StepMemory int `json:"step_memory"`
@@ -312,7 +382,7 @@ type ComponentReport struct {
 	CreateTime  string `json:"create_time"`
 }
 
-//DefaultExtendMethodRule default Scaling rules
+// DefaultExtendMethodRule default Scaling rules
 func DefaultExtendMethodRule() ComponentExtendMethodRule {
 	return ComponentExtendMethodRule{
 		MinNode:    1,
@@ -324,7 +394,7 @@ func DefaultExtendMethodRule() ComponentExtendMethodRule {
 	}
 }
 
-//Plugin  templete plugin model
+// Plugin  templete plugin model
 type Plugin struct {
 	Origin        string              `json:"origin"`
 	CodeRepo      string              `json:"code_repo"`
@@ -344,19 +414,19 @@ type Plugin struct {
 	BuildVersion  string              `json:"build_version"`
 }
 
-//Validation validation app templete
+// Validation validation app templete
 func (s *Plugin) Validation() error {
 	return nil
 }
 
-//HandleNullValue 处理null值数据
+// HandleNullValue 处理null值数据
 func (s *Plugin) HandleNullValue() {
 	if s.ConfigGroups == nil {
 		s.ConfigGroups = []PluginConfigGroup{}
 	}
 }
 
-//PluginConfigGroup 插件配置定义
+// PluginConfigGroup 插件配置定义
 type PluginConfigGroup struct {
 	ConfigName      string                    `json:"config_name"`
 	Options         []PluginConfigGroupOption `json:"options,omitempty"`
@@ -366,7 +436,7 @@ type PluginConfigGroup struct {
 	ServiceMetaType string                    `json:"service_meta_type"`
 }
 
-//PluginConfigGroupOption 插件配置项定义
+// PluginConfigGroupOption 插件配置项定义
 type PluginConfigGroupOption struct {
 	AttrValue        string `json:"attr_alt_value"`
 	AttrType         string `json:"attr_type"`
@@ -380,31 +450,31 @@ type PluginConfigGroupOption struct {
 	Protocol         string `json:"protocol"`
 }
 
-//ComponentShareVolume 共享其他服务存储信息
+// ComponentShareVolume 共享其他服务存储信息
 type ComponentShareVolume struct {
 	VolumeName       string `json:"mnt_name"`
 	VolumeMountDir   string `json:"mnt_dir"`
 	ShareServiceUUID string `json:"service_share_uuid"`
 }
 
-//ComponentDep 服务依赖关系数据
+// ComponentDep 服务依赖关系数据
 type ComponentDep struct {
 	DepServiceKey string `json:"dep_service_key"`
 }
 
-//VolumeType volume type
+// VolumeType volume type
 type VolumeType string
 
-//ShareFileVolumeType 共享文件存储
+// ShareFileVolumeType 共享文件存储
 var ShareFileVolumeType VolumeType = "share-file"
 
-//LocalVolumeType 本地文件存储
+// LocalVolumeType 本地文件存储
 var LocalVolumeType VolumeType = "local"
 
-//MemoryFSVolumeType 内存文件存储
+// MemoryFSVolumeType 内存文件存储
 var MemoryFSVolumeType VolumeType = "memoryfs"
 
-//ConfigFileVolumeType configuration file volume type
+// ConfigFileVolumeType configuration file volume type
 var ConfigFileVolumeType VolumeType = "config-file"
 
 func (vt VolumeType) String() string {
@@ -423,7 +493,7 @@ var RWXAccessMode AccessMode = "RWX"
 // ROXAccessMode only read
 var ROXAccessMode AccessMode = "ROX"
 
-//ComponentVolume volume config
+// ComponentVolume volume config
 type ComponentVolume struct {
 	VolumeName      string     `json:"volume_name"`
 	FileConent      string     `json:"file_content"`
@@ -435,7 +505,7 @@ type ComponentVolume struct {
 	Mode            *int       `json:"mode,omitempty"`
 }
 
-//ComponentPluginConfig 服务插件配置数据
+// ComponentPluginConfig 服务插件配置数据
 type ComponentPluginConfig struct {
 	CreateTime      string                   `json:"create_time"`
 	PluginStatus    bool                     `json:"plugin_status"`
@@ -450,7 +520,7 @@ type ComponentPluginConfig struct {
 	BuildVersion string `json:"build_version"`
 }
 
-//ComponentMonitor component monitor plugin
+// ComponentMonitor component monitor plugin
 type ComponentMonitor struct {
 	Name            string `json:"name"`
 	ServiceShowName string `json:"service_show_name"`
@@ -468,7 +538,7 @@ type ComponentGraph struct {
 	Sequence    int    `json:"sequence"`
 }
 
-//AppConfigGroup app config groups
+// AppConfigGroup app config groups
 type AppConfigGroup struct {
 	Name          string            `json:"name"`
 	InjectionType string            `json:"injection_type"`
@@ -476,7 +546,7 @@ type AppConfigGroup struct {
 	ComponentKeys []string          `json:"component_keys"`
 }
 
-//IngressHTTPRoute ingress http route
+// IngressHTTPRoute ingress http route
 type IngressHTTPRoute struct {
 	DefaultDomain        bool              `json:"default_domain"`
 	Location             string            `json:"location"`
@@ -496,14 +566,14 @@ type IngressHTTPRoute struct {
 	TargetComponent
 }
 
-//IngressSreamRoute ingress stream route
+// IngressSreamRoute ingress stream route
 type IngressSreamRoute struct {
 	Protocol          string `json:"protocol"`
 	ConnectionTimeout int    `json:"connection_timeout"`
 	TargetComponent
 }
 
-//TargetComponent target component
+// TargetComponent target component
 type TargetComponent struct {
 	ComponentKey string `json:"component_key"`
 	Port         uint32 `json:"port"`
