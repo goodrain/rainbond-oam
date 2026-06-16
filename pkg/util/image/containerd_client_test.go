@@ -250,6 +250,52 @@ func TestPushWithPlainHTTPFallbackDoesNotRetryOtherErrors(t *testing.T) {
 	}
 }
 
+func TestPushWithPlainHTTPFallbackRetriesTransientErrors(t *testing.T) {
+	withFastContainerdPushRetry(t)
+	attempts := 0
+
+	err := pushWithPlainHTTPFallback(func(defaultScheme string) error {
+		attempts++
+		if attempts < 3 {
+			return errors.New(`failed to do request: Head "https://goodrain.me/v2/rbd-plugins-nginx-nginx/blobs/sha256:abc": EOF`)
+		}
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("expected transient retry to succeed, got %v", err)
+	}
+	if attempts != 3 {
+		t.Fatalf("expected three push attempts, got %d", attempts)
+	}
+}
+
+func TestPushWithPlainHTTPFallbackStopsAfterTransientRetryLimit(t *testing.T) {
+	withFastContainerdPushRetry(t)
+	attempts := 0
+
+	err := pushWithPlainHTTPFallback(func(defaultScheme string) error {
+		attempts++
+		return errors.New(`failed to do request: Head "https://goodrain.me/v2/rbd-plugins-nginx-nginx/blobs/sha256:abc": EOF`)
+	})
+
+	if err == nil {
+		t.Fatal("expected transient error after retry limit")
+	}
+	if attempts != containerdPushMaxAttempts {
+		t.Fatalf("expected %d attempts, got %d", containerdPushMaxAttempts, attempts)
+	}
+}
+
+func withFastContainerdPushRetry(t *testing.T) {
+	t.Helper()
+	oldSleep := sleepBeforeContainerdPushRetry
+	sleepBeforeContainerdPushRetry = func(time.Duration) {}
+	t.Cleanup(func() {
+		sleepBeforeContainerdPushRetry = oldSleep
+	})
+}
+
 func TestBuildImageExportOptsAddsPlatformFilterForManifestLists(t *testing.T) {
 	ctx := context.Background()
 	currentPlatform := platforms.DefaultSpec()

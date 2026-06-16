@@ -34,6 +34,10 @@ type containerdImageCliImpl struct {
 	client *containerd.Client
 }
 
+const containerdPushMaxAttempts = 5
+
+var sleepBeforeContainerdPushRetry = time.Sleep
+
 // ImageSave save image to tar file
 // destination destination file name eg. /tmp/xxx.tar
 func (c *containerdImageCliImpl) ImageSave(destination string, images []string) error {
@@ -252,12 +256,42 @@ func (c *containerdImageCliImpl) ImagePush(image, user, pass string, timeout int
 }
 
 func pushWithPlainHTTPFallback(push func(defaultScheme string) error) error {
-	err := push("")
-	if !isPlainHTTPRegistryError(err) {
-		return err
+	defaultScheme := ""
+	for attempt := 1; attempt <= containerdPushMaxAttempts; attempt++ {
+		err := push(defaultScheme)
+		if err == nil {
+			return nil
+		}
+		if isPlainHTTPRegistryError(err) {
+			if defaultScheme != "http" {
+				logrus.Infof("push image with HTTPS failed against plain HTTP registry, retry with HTTP")
+				defaultScheme = "http"
+			}
+		} else if !isTransientRegistryPushError(err) || attempt == containerdPushMaxAttempts {
+			return err
+		}
+		logrus.Warnf("push image failed, retrying attempt %d/%d: %v", attempt+1, containerdPushMaxAttempts, err)
+		sleepBeforeContainerdPushRetry(time.Duration(attempt) * time.Second)
 	}
-	logrus.Infof("push image with HTTPS failed against plain HTTP registry, retry with HTTP")
-	return push("http")
+	return nil
+}
+
+func isTransientRegistryPushError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := strings.ToLower(err.Error())
+	return strings.Contains(errMsg, "eof") ||
+		strings.Contains(errMsg, "connection reset by peer") ||
+		strings.Contains(errMsg, "connection refused") ||
+		strings.Contains(errMsg, "temporarily unavailable") ||
+		strings.Contains(errMsg, "timeout") ||
+		strings.Contains(errMsg, "bad gateway") ||
+		strings.Contains(errMsg, "service unavailable") ||
+		strings.Contains(errMsg, "gateway timeout") ||
+		strings.Contains(errMsg, "status code 502") ||
+		strings.Contains(errMsg, "status code 503") ||
+		strings.Contains(errMsg, "status code 504")
 }
 
 func waitForContainerdPush(ctx context.Context, push func(context.Context) error, displayProgress func(context.Context, <-chan struct{}) error) error {
