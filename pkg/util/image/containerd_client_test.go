@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"testing"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/images/archive"
 	"github.com/containerd/containerd/platforms"
+	"github.com/containerd/containerd/remotes/docker"
 	digest "github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -84,6 +86,45 @@ func writeBlob(t *testing.T, blobs map[digest.Digest][]byte, payload []byte, med
 	}
 	blobs[desc.Digest] = payload
 	return desc
+}
+
+func TestPlainHTTPRegistryErrorIsRecognized(t *testing.T) {
+	err := errors.New(`failed to do request: Head "https://172.16.0.231:8081/v2/library/nginx/manifests/latest": http: server gave HTTP response to HTTPS client`)
+
+	if !isPlainHTTPRegistryError(err) {
+		t.Fatalf("expected plain HTTP registry error to be recognized")
+	}
+}
+
+func TestPlainHTTPRegistryErrorIgnoresOtherPullErrors(t *testing.T) {
+	for _, err := range []error{
+		nil,
+		errors.New("pull access denied"),
+		errors.New("manifest unknown"),
+		errors.New("context deadline exceeded"),
+	} {
+		if isPlainHTTPRegistryError(err) {
+			t.Fatalf("expected %v not to trigger HTTP fallback", err)
+		}
+	}
+}
+
+func TestContainerdResolverOptionsCanUsePlainHTTP(t *testing.T) {
+	opts := containerdResolverOptions(context.Background(), docker.NewInMemoryTracker(), newContainerdHostOptions("demo", "password", "http"))
+
+	hosts, err := opts.Hosts("172.16.0.231:8081")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hosts) != 1 {
+		t.Fatalf("expected one registry host, got %d", len(hosts))
+	}
+	if hosts[0].Scheme != "http" {
+		t.Fatalf("expected resolver scheme http, got %q", hosts[0].Scheme)
+	}
+	if hosts[0].Host != "172.16.0.231:8081" {
+		t.Fatalf("expected registry host to be preserved, got %q", hosts[0].Host)
+	}
 }
 
 func TestBuildImageExportOptsAddsPlatformFilterForManifestLists(t *testing.T) {

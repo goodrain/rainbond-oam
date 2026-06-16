@@ -5,6 +5,12 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
+	"sync"
+	"text/tabwriter"
+	"time"
+
 	"github.com/containerd/containerd"
 	ctrcontent "github.com/containerd/containerd/cmd/ctr/commands/content"
 	"github.com/containerd/containerd/content"
@@ -22,10 +28,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
-	"os"
-	"sync"
-	"text/tabwriter"
-	"time"
 )
 
 type containerdImageCliImpl struct {
@@ -60,6 +62,30 @@ func buildImageExportOpts(store images.Store, imageNames []string) []archive.Exp
 	return exportOpts
 }
 
+func newContainerdHostOptions(username, password, defaultScheme string) config.HostOptions {
+	hostOpt := config.HostOptions{
+		DefaultTLS: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+		DefaultScheme: defaultScheme,
+	}
+	hostOpt.Credentials = func(host string) (string, string, error) {
+		return username, password, nil
+	}
+	return hostOpt
+}
+
+func containerdResolverOptions(ctx context.Context, tracker docker.StatusTracker, hostOpt config.HostOptions) docker.ResolverOptions {
+	return docker.ResolverOptions{
+		Tracker: tracker,
+		Hosts:   config.ConfigureHosts(ctx, hostOpt),
+	}
+}
+
+func isPlainHTTPRegistryError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "server gave HTTP response to HTTPS client")
+}
+
 func (c *containerdImageCliImpl) ImagePull(image string, username, password string, timeout int) (*ocispec.ImageConfig, error) {
 	named, err := refdocker.ParseDockerRef(image)
 	if err != nil {
@@ -81,19 +107,9 @@ func (c *containerdImageCliImpl) ImagePull(image string, username, password stri
 		}
 		return nil, nil
 	})
-	defaultTLS := &tls.Config{
-		InsecureSkipVerify: true,
-	}
-	hostOpt := config.HostOptions{}
-	hostOpt.DefaultTLS = defaultTLS
-	hostOpt.Credentials = func(host string) (string, string, error) {
-		return username, password, nil
-	}
+	hostOpt := newContainerdHostOptions(username, password, "")
 	Tracker := docker.NewInMemoryTracker()
-	options := docker.ResolverOptions{
-		Tracker: Tracker,
-		Hosts:   config.ConfigureHosts(pctx, hostOpt),
-	}
+	options := containerdResolverOptions(pctx, Tracker, hostOpt)
 
 	platformMC := platforms.Ordered([]ocispec.Platform{platforms.DefaultSpec()}...)
 	opts := []containerd.RemoteOpt{
@@ -105,6 +121,19 @@ func (c *containerdImageCliImpl) ImagePull(image string, username, password stri
 	}
 	var img containerd.Image
 	img, err = c.client.Pull(pctx, reference, opts...)
+	if isPlainHTTPRegistryError(err) {
+		logrus.Infof("pull image %s with HTTPS failed against plain HTTP registry, retry with HTTP", reference)
+		hostOpt = newContainerdHostOptions(username, password, "http")
+		options = containerdResolverOptions(pctx, Tracker, hostOpt)
+		opts = []containerd.RemoteOpt{
+			containerd.WithImageHandler(h),
+			//nolint:staticcheck
+			containerd.WithSchema1Conversion, //lint:ignore SA1019 nerdctl should support schema1 as well.
+			containerd.WithPlatformMatcher(platformMC),
+			containerd.WithResolver(docker.NewResolver(options)),
+		}
+		img, err = c.client.Pull(pctx, reference, opts...)
+	}
 	stopProgress()
 	if err != nil {
 		return nil, err
