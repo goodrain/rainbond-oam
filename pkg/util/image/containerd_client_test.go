@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images"
@@ -124,6 +125,86 @@ func TestContainerdResolverOptionsCanUsePlainHTTP(t *testing.T) {
 	}
 	if hosts[0].Host != "172.16.0.231:8081" {
 		t.Fatalf("expected registry host to be preserved, got %q", hosts[0].Host)
+	}
+}
+
+func TestWaitForContainerdPushWaitsForPushCompletion(t *testing.T) {
+	releasePush := make(chan struct{})
+	pushStarted := make(chan struct{})
+	progressDone := make(chan struct{})
+	returned := make(chan error, 1)
+
+	go func() {
+		returned <- waitForContainerdPush(context.Background(),
+			func(ctx context.Context) error {
+				close(pushStarted)
+				<-releasePush
+				return nil
+			},
+			func(ctx context.Context, doneCh <-chan struct{}) error {
+				<-doneCh
+				close(progressDone)
+				return nil
+			},
+		)
+	}()
+
+	<-pushStarted
+	select {
+	case err := <-returned:
+		t.Fatalf("push wait returned before push completed: %v", err)
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	close(releasePush)
+	select {
+	case err := <-returned:
+		if err != nil {
+			t.Fatalf("expected push wait to succeed, got %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for push wait to return")
+	}
+
+	select {
+	case <-progressDone:
+	default:
+		t.Fatal("expected progress callback to observe push completion")
+	}
+}
+
+func TestWaitForContainerdPushReturnsPushError(t *testing.T) {
+	want := errors.New("push failed")
+
+	err := waitForContainerdPush(context.Background(),
+		func(ctx context.Context) error {
+			return want
+		},
+		func(ctx context.Context, doneCh <-chan struct{}) error {
+			<-doneCh
+			return nil
+		},
+	)
+
+	if !errors.Is(err, want) {
+		t.Fatalf("expected push error %v, got %v", want, err)
+	}
+}
+
+func TestWaitForContainerdPushReturnsProgressError(t *testing.T) {
+	want := errors.New("progress failed")
+
+	err := waitForContainerdPush(context.Background(),
+		func(ctx context.Context) error {
+			return nil
+		},
+		func(ctx context.Context, doneCh <-chan struct{}) error {
+			return want
+		},
+	)
+
+	if !errors.Is(err, want) {
+		t.Fatalf("expected progress error %v, got %v", want, err)
 	}
 }
 

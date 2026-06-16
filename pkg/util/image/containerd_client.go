@@ -220,11 +220,7 @@ func (c *containerdImageCliImpl) ImagePush(image, user, pass string, timeout int
 	resolver := docker.NewResolver(options)
 	ongoing := newPushJobs(NewTracker)
 
-	eg, ctx := errgroup.WithContext(ctx)
-	// used to notify the progress writer
-	doneCh := make(chan struct{})
-	eg.Go(func() error {
-		defer close(doneCh)
+	return waitForContainerdPush(ctx, func(ctx context.Context) error {
 		jobHandler := images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
 			ongoing.add(remotes.MakeRefKey(ctx, desc))
 			return nil, nil
@@ -235,8 +231,7 @@ func (c *containerdImageCliImpl) ImagePush(image, user, pass string, timeout int
 			containerd.WithImageHandler(jobHandler),
 		}
 		return c.client.Push(ctx, reference, desc, ropts...)
-	})
-	eg.Go(func() error {
+	}, func(ctx context.Context, doneCh <-chan struct{}) error {
 		var (
 			ticker = time.NewTicker(100 * time.Millisecond)
 			fw     = progress.NewWriter(os.Stdout)
@@ -263,7 +258,19 @@ func (c *containerdImageCliImpl) ImagePush(image, user, pass string, timeout int
 			}
 		}
 	})
-	return nil
+}
+
+func waitForContainerdPush(ctx context.Context, push func(context.Context) error, displayProgress func(context.Context, <-chan struct{}) error) error {
+	eg, ctx := errgroup.WithContext(ctx)
+	doneCh := make(chan struct{})
+	eg.Go(func() error {
+		defer close(doneCh)
+		return push(ctx)
+	})
+	eg.Go(func() error {
+		return displayProgress(ctx, doneCh)
+	})
+	return eg.Wait()
 }
 
 type pushjobs struct {
