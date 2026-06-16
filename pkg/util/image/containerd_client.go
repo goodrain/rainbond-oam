@@ -204,60 +204,60 @@ func (c *containerdImageCliImpl) ImagePush(image, user, pass string, timeout int
 			}
 		}
 	}
-	NewTracker := docker.NewInMemoryTracker()
-	options := docker.ResolverOptions{
-		Tracker: NewTracker,
-	}
-	hostOptions := config.HostOptions{
-		DefaultTLS: &tls.Config{
-			InsecureSkipVerify: true,
-		},
-	}
-	hostOptions.Credentials = func(host string) (string, string, error) {
-		return user, pass, nil
-	}
-	options.Hosts = config.ConfigureHosts(ctx, hostOptions)
-	resolver := docker.NewResolver(options)
-	ongoing := newPushJobs(NewTracker)
+	return pushWithPlainHTTPFallback(func(defaultScheme string) error {
+		newTracker := docker.NewInMemoryTracker()
+		options := containerdResolverOptions(ctx, newTracker, newContainerdHostOptions(user, pass, defaultScheme))
+		resolver := docker.NewResolver(options)
+		ongoing := newPushJobs(newTracker)
 
-	return waitForContainerdPush(ctx, func(ctx context.Context) error {
-		jobHandler := images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
-			ongoing.add(remotes.MakeRefKey(ctx, desc))
-			return nil, nil
-		})
+		return waitForContainerdPush(ctx, func(ctx context.Context) error {
+			jobHandler := images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
+				ongoing.add(remotes.MakeRefKey(ctx, desc))
+				return nil, nil
+			})
 
-		ropts := []containerd.RemoteOpt{
-			containerd.WithResolver(resolver),
-			containerd.WithImageHandler(jobHandler),
-		}
-		return c.client.Push(ctx, reference, desc, ropts...)
-	}, func(ctx context.Context, doneCh <-chan struct{}) error {
-		var (
-			ticker = time.NewTicker(100 * time.Millisecond)
-			fw     = progress.NewWriter(os.Stdout)
-			start  = time.Now()
-			done   bool
-		)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				fw.Flush()
-				tw := tabwriter.NewWriter(fw, 1, 8, 1, ' ', 0)
-				ctrcontent.Display(tw, ongoing.status(), start)
-				tw.Flush()
-				if done {
-					fw.Flush()
-					return nil
-				}
-			case <-doneCh:
-				done = true
-			case <-ctx.Done():
-				done = true // allow ui to update once more
+			ropts := []containerd.RemoteOpt{
+				containerd.WithResolver(resolver),
+				containerd.WithImageHandler(jobHandler),
 			}
-		}
+			return c.client.Push(ctx, reference, desc, ropts...)
+		}, func(ctx context.Context, doneCh <-chan struct{}) error {
+			var (
+				ticker = time.NewTicker(100 * time.Millisecond)
+				fw     = progress.NewWriter(os.Stdout)
+				start  = time.Now()
+				done   bool
+			)
+			defer ticker.Stop()
+
+			for {
+				select {
+				case <-ticker.C:
+					fw.Flush()
+					tw := tabwriter.NewWriter(fw, 1, 8, 1, ' ', 0)
+					ctrcontent.Display(tw, ongoing.status(), start)
+					tw.Flush()
+					if done {
+						fw.Flush()
+						return nil
+					}
+				case <-doneCh:
+					done = true
+				case <-ctx.Done():
+					done = true // allow ui to update once more
+				}
+			}
+		})
 	})
+}
+
+func pushWithPlainHTTPFallback(push func(defaultScheme string) error) error {
+	err := push("")
+	if !isPlainHTTPRegistryError(err) {
+		return err
+	}
+	logrus.Infof("push image with HTTPS failed against plain HTTP registry, retry with HTTP")
+	return push("http")
 }
 
 func waitForContainerdPush(ctx context.Context, push func(context.Context) error, displayProgress func(context.Context, <-chan struct{}) error) error {

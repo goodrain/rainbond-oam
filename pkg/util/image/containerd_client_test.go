@@ -208,6 +208,48 @@ func TestWaitForContainerdPushReturnsProgressError(t *testing.T) {
 	}
 }
 
+func TestPushWithPlainHTTPFallbackRetriesWithHTTP(t *testing.T) {
+	schemes := []string{}
+
+	err := pushWithPlainHTTPFallback(func(defaultScheme string) error {
+		schemes = append(schemes, defaultScheme)
+		if len(schemes) == 1 {
+			return errors.New(`failed to do request: Head "https://172.16.0.231:8081/v2/library/nginx/blobs/sha256:abc": http: server gave HTTP response to HTTPS client`)
+		}
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("expected retry to succeed, got %v", err)
+	}
+	if len(schemes) != 2 {
+		t.Fatalf("expected two push attempts, got %d", len(schemes))
+	}
+	if schemes[0] != "" {
+		t.Fatalf("expected first push to use default scheme, got %q", schemes[0])
+	}
+	if schemes[1] != "http" {
+		t.Fatalf("expected second push to use http, got %q", schemes[1])
+	}
+}
+
+func TestPushWithPlainHTTPFallbackDoesNotRetryOtherErrors(t *testing.T) {
+	attempts := 0
+	want := errors.New("unauthorized")
+
+	err := pushWithPlainHTTPFallback(func(defaultScheme string) error {
+		attempts++
+		return want
+	})
+
+	if !errors.Is(err, want) {
+		t.Fatalf("expected original push error %v, got %v", want, err)
+	}
+	if attempts != 1 {
+		t.Fatalf("expected one push attempt, got %d", attempts)
+	}
+}
+
 func TestBuildImageExportOptsAddsPlatformFilterForManifestLists(t *testing.T) {
 	ctx := context.Background()
 	currentPlatform := platforms.DefaultSpec()
